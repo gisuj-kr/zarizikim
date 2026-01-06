@@ -31,7 +31,7 @@ function createWindow() {
         height: 800,
         minWidth: 800,
         minHeight: 600,
-        show: false, // 처음에는 숨김 (트레이에서 열기)
+        show: false, // ready-to-show 이벤트에서 표시
         frame: true,
         webPreferences: {
             nodeIntegration: false,
@@ -58,9 +58,10 @@ function createWindow() {
         }
     });
 
-    // 윈도우 준비되면 표시
+    // 윈도우 준비되면 표시 (처음 실행 시)
     mainWindow.once('ready-to-show', () => {
-        // 트레이에서 열기 전까지 숨김 상태 유지
+        mainWindow.show();
+        mainWindow.focus();
     });
 }
 
