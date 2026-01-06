@@ -56,11 +56,12 @@ function createTray(window, app) {
 }
 
 /**
- * 기본 아이콘 생성 (16x16 단색)
+ * 기본 아이콘 생성 (macOS와 Windows 호환)
  */
 function createDefaultIcon(color) {
-    // 간단한 16x16 아이콘 생성
-    const size = 16;
+    // macOS는 22x22, Windows는 16x16 권장
+    const isMac = process.platform === 'darwin';
+    const size = isMac ? 22 : 16;
     const canvas = Buffer.alloc(size * size * 4);
 
     // 색상 파싱
@@ -70,7 +71,7 @@ function createDefaultIcon(color) {
 
     // 원형 아이콘 생성
     const center = size / 2;
-    const radius = size / 2 - 1;
+    const radius = size / 2 - 2;
 
     for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
@@ -91,7 +92,13 @@ function createDefaultIcon(color) {
         }
     }
 
-    return nativeImage.createFromBuffer(canvas, { width: size, height: size });
+    const image = nativeImage.createFromBuffer(canvas, { width: size, height: size });
+
+    // macOS에서는 @2x 해상도 지원을 위해 리사이즈
+    if (isMac) {
+        return image.resize({ width: 18, height: 18 });
+    }
+    return image;
 }
 
 /**
