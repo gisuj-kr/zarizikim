@@ -1,0 +1,172 @@
+/**
+ * MainView 컴포넌트 스타일
+ */
+
+.main-view {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  padding: var(--spacing-xl);
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* 인사말 */
+.greeting {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.greeting h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+}
+
+.current-time {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+/* 상태 카드 */
+.status-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+@media (max-width: 600px) {
+  .status-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.status-card {
+  padding: var(--spacing-lg);
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+}
+
+.status-indicator.active {
+  background-color: var(--color-success);
+  box-shadow: 0 0 8px var(--color-success);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.status-indicator.done {
+  background-color: var(--color-primary);
+}
+
+.status-indicator.away {
+  background-color: var(--color-warning);
+  box-shadow: 0 0 8px var(--color-warning);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.status-indicator.idle {
+  background-color: var(--text-muted);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.status-label {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.status-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-item-label {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.status-item-value {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.status-item-value.highlight {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* 액션 버튼 */
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.action-btn {
+  width: 100%;
+  padding: var(--spacing-lg);
+  font-size: 1.25rem;
+}
+
+.checkout-message {
+  text-align: center;
+  padding: var(--spacing-xl);
+  background-color: var(--bg-card);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+}
+
+.checkout-message p {
+  font-size: 1.25rem;
+  color: var(--text-secondary);
+}
+
+/* 메모 입력 */
+.memo-card {
+  padding: var(--spacing-lg);
+}
+
+.memo-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.memo-input {
+  resize: none;
+  font-family: inherit;
+}

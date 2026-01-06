@@ -1,0 +1,63 @@
+{
+    "name": "zarizikim",
+    "version": "1.0.0",
+    "description": "출퇴근 체크 및 자리비움 추적 데스크톱 애플리케이션",
+    "main": "electron/main.js",
+    "scripts": {
+        "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
+        "dev:vite": "vite",
+        "dev:electron": "wait-on http://localhost:5173 && electron .",
+        "build": "vite build",
+        "dist:win": "npm run build && electron-builder --win",
+        "dist:mac": "npm run build && electron-builder --mac",
+        "dist": "npm run build && electron-builder --win --mac"
+    },
+    "keywords": [
+        "electron",
+        "attendance",
+        "time-tracking"
+    ],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "@vitejs/plugin-react": "^4.2.1",
+        "concurrently": "^8.2.2",
+        "electron": "^28.1.0",
+        "electron-builder": "^24.9.1",
+        "vite": "^5.0.10",
+        "wait-on": "^7.2.0"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.39.1",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-router-dom": "^6.21.1",
+        "zustand": "^4.4.7",
+        "xlsx": "^0.18.5",
+        "uuid": "^9.0.1"
+    },
+    "build": {
+        "appId": "com.zarizikim.app",
+        "productName": "근퇴기록",
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "dist/**/*",
+            "electron/**/*",
+            "resources/**/*"
+        ],
+        "win": {
+            "target": "nsis",
+            "icon": "resources/icons/icon.ico"
+        },
+        "mac": {
+            "target": "dmg",
+            "icon": "resources/icons/icon.icns"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true
+        }
+    }
+}

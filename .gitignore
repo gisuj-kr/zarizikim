@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+web-dashboard/node_modules/
+
+# Build outputs
+dist/
+release/
+out/
+web-dashboard/out/
+web-dashboard/.next/
+
+# Environment files (contains secrets)
+.env
+.env.local
+.env.*.local
+web-dashboard/.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cache
+.cache/
+*.cache
+
+# Electron builder cache
+.electron-builder/
