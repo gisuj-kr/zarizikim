@@ -52,7 +52,15 @@
             "icon": "resources/icons/icon.ico"
         },
         "mac": {
-            "target": "dmg",
+            "target": [
+                {
+                    "target": "dmg",
+                    "arch": [
+                        "x64",
+                        "arm64"
+                    ]
+                }
+            ],
             "icon": "resources/icons/icon.icns"
         },
         "nsis": {
