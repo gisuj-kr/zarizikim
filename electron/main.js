@@ -5,7 +5,7 @@
  * - IPC 통신 처리
  */
 
-const { app, BrowserWindow, ipcMain, powerMonitor, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, powerMonitor, Notification, dialog } = require('electron');
 const path = require('path');
 const { createTray, updateTrayIcon } = require('./tray');
 
@@ -291,11 +291,59 @@ app.on('activate', () => {
     }
 });
 
-// 앱 종료 전
-app.on('before-quit', () => {
-    app.isQuitting = true;
-    if (idleCheckInterval) {
-        clearInterval(idleCheckInterval);
+// 앱 종료 전 - 출근 상태면 확인 대화상자 표시
+app.on('before-quit', async (event) => {
+    // 이미 종료 확정되었으면 바로 종료
+    if (app.isQuitting) {
+        if (idleCheckInterval) {
+            clearInterval(idleCheckInterval);
+        }
+        return;
+    }
+
+    // 출근 상태면 확인 대화상자 표시
+    if (isCheckedIn) {
+        event.preventDefault();
+
+        const result = await dialog.showMessageBox(mainWindow, {
+            type: 'question',
+            buttons: ['퇴근 후 종료', '취소'],
+            defaultId: 0,
+            cancelId: 1,
+            title: '종료 확인',
+            message: '퇴근 처리 후 종료됩니다.',
+            detail: '앱을 종료하면 자동으로 퇴근 처리됩니다. 계속하시겠습니까?',
+        });
+
+        if (result.response === 0) {
+            // 퇴근 후 종료 선택
+            app.isQuitting = true;
+
+            // 퇴근 처리
+            if (mainWindow && mainWindow.webContents) {
+                mainWindow.webContents.send('auto-check-out');
+            }
+
+            // 자리비움 상태면 종료 처리
+            if (isAway && mainWindow && mainWindow.webContents) {
+                mainWindow.webContents.send('auto-away-end', {
+                    startTime: awayStartTime?.toISOString(),
+                    endTime: new Date().toISOString(),
+                });
+            }
+
+            // 잠시 대기 후 종료 (데이터 저장 시간 확보)
+            setTimeout(() => {
+                app.quit();
+            }, 500);
+        }
+        // 취소 선택 시 아무것도 안 함 (종료 취소)
+    } else {
+        // 출근 상태 아니면 바로 종료
+        app.isQuitting = true;
+        if (idleCheckInterval) {
+            clearInterval(idleCheckInterval);
+        }
     }
 });
 
