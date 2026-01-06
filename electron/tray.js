@@ -120,7 +120,7 @@ function updateContextMenu() {
             label: '종료',
             click: () => {
                 if (appRef) {
-                    appRef.isQuitting = true;
+                    // isQuitting을 여기서 설정하지 않음 - before-quit에서 처리
                     appRef.quit();
                 }
             },
