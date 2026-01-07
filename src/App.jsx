@@ -89,24 +89,36 @@ function App() {
     useEffect(() => {
         if (loading || !window.electronAPI) return;
 
+        // user가 없으면 (처음 실행 또는 사용자 등록 전) 바로 알림 보내고 윈도우 표시
+        if (!user) {
+            window.electronAPI.notifyRendererReady(false, null);
+            return;
+        }
+
         const notifyReady = async () => {
-            // 오늘 출퇴근 기록 로드
-            const attendance = await loadTodayAttendance();
+            try {
+                // 오늘 출퇴근 기록 로드
+                const attendance = await loadTodayAttendance();
 
-            // 출근 상태 확인 (check_in 있고 check_out 없고 work_duration_minutes 없으면 근무중)
-            const isAlreadyCheckedIn = attendance?.check_in &&
-                !attendance?.check_out &&
-                !attendance?.work_duration_minutes;
+                // 출근 상태 확인 (check_in 있고 check_out 없고 work_duration_minutes 없으면 근무중)
+                const isAlreadyCheckedIn = attendance?.check_in &&
+                    !attendance?.check_out &&
+                    !attendance?.work_duration_minutes;
 
-            // 메인 프로세스에 렌더러 준비 완료 알림
-            window.electronAPI.notifyRendererReady(
-                isAlreadyCheckedIn,
-                attendance?.check_in || null
-            );
+                // 메인 프로세스에 렌더러 준비 완료 알림
+                window.electronAPI.notifyRendererReady(
+                    isAlreadyCheckedIn,
+                    attendance?.check_in || null
+                );
+            } catch (error) {
+                console.error('출퇴근 기록 로드 실패:', error);
+                // 에러 발생 시 윈도우 표시
+                window.electronAPI.notifyRendererReady(false, null);
+            }
         };
 
         notifyReady();
-    }, [loading, loadTodayAttendance]);
+    }, [loading, user, loadTodayAttendance]);
 
     // 로딩 중
     if (loading) {
