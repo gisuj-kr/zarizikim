@@ -40,9 +40,9 @@ jobs:
           name: windows-build
           path: release/*.exe
 
-  # macOS 빌드
+  # macOS 빌드 (Intel Mac에서 빌드)
   build-macos:
-    runs-on: macos-latest
+    runs-on: macos-13
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
