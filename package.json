@@ -1,6 +1,6 @@
 {
     "name": "zarizikim",
-    "version": "1.0.0",
+    "version": "1.0.5",
     "description": "출퇴근 체크 및 자리비움 추적 데스크톱 애플리케이션",
     "main": "electron/main.js",
     "scripts": {
@@ -61,7 +61,10 @@
                     ]
                 }
             ],
-            "icon": "resources/icons/icon.icns"
+            "icon": "resources/icons/icon.icns",
+            "identity": null,
+            "hardenedRuntime": false,
+            "gatekeeperAssess": false
         },
         "nsis": {
             "oneClick": false,
