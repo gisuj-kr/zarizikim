@@ -32,9 +32,7 @@ jobs:
         run: npm ci
 
       - name: Build Electron app
-        run: npm run dist:win
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build && npx electron-builder --win -p never
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -64,9 +62,7 @@ jobs:
         run: npm ci
 
       - name: Build Electron app
-        run: npm run dist:mac
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build && npx electron-builder --mac -p never
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
