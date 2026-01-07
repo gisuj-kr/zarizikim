@@ -14,6 +14,10 @@ export default function UsersPage() {
     const [awayHistory, setAwayHistory] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    // 팝업 상태
+    const [selectedRecord, setSelectedRecord] = useState(null);
+    const [showModal, setShowModal] = useState(false);
+
     // 사용자 목록 로드
     useEffect(() => {
         const loadUsers = async () => {
@@ -85,31 +89,77 @@ export default function UsersPage() {
     };
 
     // 근무 시간 계산
-    const calculateWorkMinutes = (checkIn, checkOut) => {
-        if (!checkIn || !checkOut) return 0;
-        const start = new Date(checkIn);
-        const end = new Date(checkOut);
+    // - check_out이 있으면 check_in ~ check_out
+    // - check_out이 없고 work_duration_minutes가 있으면 해당 값 사용 (시스템 종료로 인한 자동 퇴근)
+    // - 둘 다 없으면 check_in ~ 18:00 기준으로 계산
+    const calculateWorkMinutes = (record) => {
+        if (!record.check_in) return 0;
+
+        // 퇴근 기록이 있으면 정상 계산
+        if (record.check_out) {
+            const start = new Date(record.check_in);
+            const end = new Date(record.check_out);
+            return Math.round((end - start) / 60000);
+        }
+
+        // 시스템 종료로 인한 자동 퇴근 (work_duration_minutes 기록됨)
+        if (record.work_duration_minutes) {
+            return record.work_duration_minutes;
+        }
+
+        // 둘 다 없으면 18시 기준으로 계산
+        const start = new Date(record.check_in);
+        const end = new Date(record.check_in);
+        end.setHours(18, 0, 0, 0);
+
+        // 출근 시간이 18시 이후면 0 반환
+        if (start >= end) return 0;
+
         return Math.round((end - start) / 60000);
+    };
+
+    // 날짜별 자리비움 기록 가져오기
+    const getAwayRecordsByDate = (date) => {
+        return awayHistory.filter(r => {
+            const recordDate = new Date(r.start_time).toISOString().split('T')[0];
+            return recordDate === date;
+        });
     };
 
     // 날짜별 자리비움 시간 합계
     const getAwayMinutesByDate = (date) => {
-        const dateRecords = awayHistory.filter(r => {
-            const recordDate = new Date(r.start_time).toISOString().split('T')[0];
-            return recordDate === date && r.duration_minutes;
-        });
+        const dateRecords = getAwayRecordsByDate(date);
         return dateRecords.reduce((sum, r) => sum + (r.duration_minutes || 0), 0);
+    };
+
+    // row 클릭 시 팝업 열기
+    const handleRowClick = (record) => {
+        const dayRecords = getAwayRecordsByDate(record.date);
+        setSelectedRecord({
+            ...record,
+            awayRecords: dayRecords,
+        });
+        setShowModal(true);
+    };
+
+    // 팝업 닫기
+    const closeModal = () => {
+        setShowModal(false);
+        setSelectedRecord(null);
     };
 
     // 통계 계산
     const calculateStats = () => {
-        const workDays = history.filter(h => h.check_in && h.check_out).length;
+        // check_out이 있거나 work_duration_minutes가 있는 날만 출근일로 계산
+        const workDays = history.filter(h => h.check_in && (h.check_out || h.work_duration_minutes)).length;
         let totalWorkMinutes = 0;
         let totalAwayMinutes = 0;
 
         history.forEach(h => {
-            if (h.check_in && h.check_out) {
-                totalWorkMinutes += calculateWorkMinutes(h.check_in, h.check_out);
+            // check_out이 있거나 work_duration_minutes가 있으면 유효한 근무 기록
+            const workMin = calculateWorkMinutes(h);
+            if (workMin > 0) {
+                totalWorkMinutes += workMin;
             }
             totalAwayMinutes += getAwayMinutesByDate(h.date);
         });
@@ -190,6 +240,9 @@ export default function UsersPage() {
                     {/* 히스토리 테이블 */}
                     <div className="card">
                         <h2 className="card-title">최근 30일 기록</h2>
+                        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                            날짜를 클릭하면 자리비움 상세 내역을 볼 수 있습니다.
+                        </p>
                         <div className="table-container">
                             {history.length === 0 ? (
                                 <div className="empty-state">기록이 없습니다.</div>
@@ -208,11 +261,15 @@ export default function UsersPage() {
                                     <tbody>
                                         {history.map(record => {
                                             const awayMinutes = getAwayMinutesByDate(record.date);
-                                            const workMinutes = calculateWorkMinutes(record.check_in, record.check_out);
+                                            const workMinutes = calculateWorkMinutes(record);
                                             const netWorkMinutes = workMinutes - awayMinutes;
 
                                             return (
-                                                <tr key={record.id}>
+                                                <tr
+                                                    key={record.id}
+                                                    onClick={() => handleRowClick(record)}
+                                                    className="clickable-row"
+                                                >
                                                     <td>{formatDate(record.date)}</td>
                                                     <td>{formatTime(record.check_in)}</td>
                                                     <td>{record.check_out ? formatTime(record.check_out) : '-'}</td>
@@ -235,6 +292,76 @@ export default function UsersPage() {
             ) : (
                 <div className="empty-state">사용자를 선택해주세요.</div>
             )}
+
+            {/* 자리비움 상세보기 팝업 */}
+            {showModal && selectedRecord && (
+                <div className="modal-overlay" onClick={closeModal}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>🪑 자리비움 상세 내역</h3>
+                            <button className="modal-close" onClick={closeModal}>✕</button>
+                        </div>
+                        <div className="modal-content">
+                            <div className="modal-user-info">
+                                <strong>{selectedUser?.name}</strong>
+                                <span style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>
+                                    {formatDate(selectedRecord.date)} | {formatTime(selectedRecord.check_in)} ~ {selectedRecord.check_out ? formatTime(selectedRecord.check_out) : '근무중'}
+                                </span>
+                            </div>
+
+                            {selectedRecord.awayRecords.length === 0 ? (
+                                <div className="empty-state" style={{ padding: '2rem' }}>
+                                    이 날 자리비움 기록이 없습니다.
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="modal-summary">
+                                        <span>총 자리비움: </span>
+                                        <strong style={{ color: 'var(--color-warning)' }}>
+                                            {formatDuration(getAwayMinutesByDate(selectedRecord.date))}
+                                        </strong>
+                                        <span style={{ marginLeft: '16px' }}>횟수: </span>
+                                        <strong>{selectedRecord.awayRecords.length}회</strong>
+                                    </div>
+                                    <table className="table modal-table">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>시작 시간</th>
+                                                <th>복귀 시간</th>
+                                                <th>소요 시간</th>
+                                                <th>구분</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {selectedRecord.awayRecords.map((record, index) => (
+                                                <tr key={record.id}>
+                                                    <td>{index + 1}</td>
+                                                    <td>{formatTime(record.start_time)}</td>
+                                                    <td>
+                                                        {record.end_time ? formatTime(record.end_time) : (
+                                                            <span className="badge badge-warning">진행중</span>
+                                                        )}
+                                                    </td>
+                                                    <td>{record.duration_minutes ? formatDuration(record.duration_minutes) : '-'}</td>
+                                                    <td>
+                                                        {record.is_auto_detected ? (
+                                                            <span className="badge badge-secondary">자동</span>
+                                                        ) : (
+                                                            <span className="badge badge-primary">수동</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+

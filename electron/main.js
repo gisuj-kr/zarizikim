@@ -18,6 +18,9 @@ let isCheckedIn = false;
 let isAway = false;
 let awayStartTime = null;
 let idleCheckInterval = null;
+let isRendererReady = false; // 렌더러 초기화 완료 여부
+let checkInTimeForShutdown = null; // 시스템 종료 시 근무시간 계산용
+let checkOutCompleteResolve = null; // 퇴근 완료 신호 Promise resolve
 
 // 유휴 시간 임계값 (10분 = 600초)
 const IDLE_THRESHOLD = 600;
@@ -58,8 +61,9 @@ function createWindow() {
         }
     });
 
-    // 윈도우 준비되면 표시 (처음 실행 시)
+    // 윈도우 준비되면 표시 (처음 실행 시) - 조건부 표시는 renderer-ready 이벤트에서 처리
     mainWindow.once('ready-to-show', () => {
+        // 기본적으로 윈도우 표시 (렌더러에서 상태 확인 후 숨김 처리)
         mainWindow.show();
         mainWindow.focus();
     });
@@ -250,20 +254,34 @@ if (!gotTheLock) {
             }
         });
 
-        // PC 종료/잠자기 시 자동 퇴근
+        // PC 종료/잠자기 시 - 18시 이후면 근무시간만 기록 (퇴근 시간은 기록 안함)
         powerMonitor.on('suspend', () => {
             if (isCheckedIn) {
-                if (mainWindow && mainWindow.webContents) {
-                    mainWindow.webContents.send('auto-check-out');
+                const now = new Date();
+                const hour = now.getHours();
+
+                if (hour >= 18) {
+                    // 18시 이후: 근무시간만 기록 (퇴근 시간 없이)
+                    if (mainWindow && mainWindow.webContents) {
+                        mainWindow.webContents.send('auto-update-work-duration');
+                    }
                 }
+                // 18시 이전: 아무것도 하지 않음 (다음 기동 시 계속 근무)
             }
         });
 
         powerMonitor.on('shutdown', () => {
             if (isCheckedIn) {
-                if (mainWindow && mainWindow.webContents) {
-                    mainWindow.webContents.send('auto-check-out');
+                const now = new Date();
+                const hour = now.getHours();
+
+                if (hour >= 18) {
+                    // 18시 이후: 근무시간만 기록 (퇴근 시간 없이)
+                    if (mainWindow && mainWindow.webContents) {
+                        mainWindow.webContents.send('auto-update-work-duration');
+                    }
                 }
+                // 18시 이전: 아무것도 하지 않음 (다음 기동 시 계속 근무)
             }
         });
 
@@ -319,11 +337,6 @@ app.on('before-quit', async (event) => {
             // 퇴근 후 종료 선택
             app.isQuitting = true;
 
-            // 퇴근 처리
-            if (mainWindow && mainWindow.webContents) {
-                mainWindow.webContents.send('auto-check-out');
-            }
-
             // 자리비움 상태면 종료 처리
             if (isAway && mainWindow && mainWindow.webContents) {
                 mainWindow.webContents.send('auto-away-end', {
@@ -332,10 +345,24 @@ app.on('before-quit', async (event) => {
                 });
             }
 
-            // 잠시 대기 후 종료 (데이터 저장 시간 확보)
-            setTimeout(() => {
-                app.quit();
-            }, 500);
+            // 퇴근 처리 요청 및 완료 대기
+            if (mainWindow && mainWindow.webContents) {
+                // Promise로 퇴근 완료 신호 대기 (최대 3초)
+                const checkOutPromise = new Promise((resolve) => {
+                    checkOutCompleteResolve = resolve;
+                });
+                const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 3000));
+
+                // 퇴근 처리 요청
+                mainWindow.webContents.send('auto-check-out');
+
+                // 퇴근 완료 또는 타임아웃 대기
+                await Promise.race([checkOutPromise, timeoutPromise]);
+                console.log('퇴근 처리 완료 또는 타임아웃');
+            }
+
+            // 종료
+            app.quit();
         }
         // 취소 선택 시 아무것도 안 함 (종료 취소)
     } else {
@@ -367,6 +394,32 @@ ipcMain.on('away-status', (event, status) => {
     }
 });
 
+// 렌더러 초기화 완료 신호 수신
+ipcMain.on('renderer-ready', (event, { isAlreadyCheckedIn, checkInTime }) => {
+    isRendererReady = true;
+
+    if (isAlreadyCheckedIn) {
+        // 이미 출근 상태면 트레이로 최소화
+        isCheckedIn = true;
+        checkInTimeForShutdown = checkInTime;
+        updateTrayIcon('working');
+        if (mainWindow) {
+            mainWindow.hide();
+        }
+    } else {
+        // 출근 안한 상태면 자동 출근 요청
+        const now = new Date();
+        const hour = now.getHours();
+
+        if (hour >= 7) {
+            // 오전 7시 이후면 자동 출근
+            if (mainWindow && mainWindow.webContents) {
+                mainWindow.webContents.send('auto-check-in');
+            }
+        }
+    }
+});
+
 // 윈도우 표시 요청
 ipcMain.on('show-window', () => {
     showWindow();
@@ -381,6 +434,15 @@ ipcMain.on('show-notification', (event, { title, body }) => {
 ipcMain.on('quit-app', () => {
     app.isQuitting = true;
     app.quit();
+});
+
+// 퇴근 완료 신호 수신 (트레이 종료 시 대기 해제)
+ipcMain.on('check-out-complete', () => {
+    console.log('퇴근 완료 신호 수신');
+    if (checkOutCompleteResolve) {
+        checkOutCompleteResolve();
+        checkOutCompleteResolve = null;
+    }
 });
 
 // 자리비움 제외 시간 설정 업데이트

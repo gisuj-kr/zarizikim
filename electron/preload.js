@@ -82,6 +82,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.send('update-away-exclude-times', settings);
     },
 
+    /**
+     * 렌더러 초기화 완료 알림 (출근 상태 전달)
+     */
+    notifyRendererReady: (isAlreadyCheckedIn, checkInTime) => {
+        ipcRenderer.send('renderer-ready', { isAlreadyCheckedIn, checkInTime });
+    },
+
+    /**
+     * 시스템 종료 시 근무시간만 업데이트 이벤트 수신 (18시 이후)
+     */
+    onAutoUpdateWorkDuration: (callback) => {
+        ipcRenderer.on('auto-update-work-duration', () => callback());
+    },
+
+    /**
+     * 퇴근 처리 완료 알림 (main에서 종료 대기 중일 때)
+     */
+    notifyCheckOutComplete: () => {
+        ipcRenderer.send('check-out-complete');
+    },
+
     // ===== 리스너 제거 =====
 
     /**
@@ -92,6 +113,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeAllListeners('auto-check-out');
         ipcRenderer.removeAllListeners('auto-away-start');
         ipcRenderer.removeAllListeners('auto-away-end');
+        ipcRenderer.removeAllListeners('auto-update-work-duration');
     },
 });
 

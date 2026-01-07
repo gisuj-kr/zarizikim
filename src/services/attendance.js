@@ -185,3 +185,81 @@ export async function getAllTodayAttendance() {
     if (error) throw error;
     return data || [];
 }
+
+/**
+ * 시스템 종료/잠자기로 인한 자동 퇴근 시 근무시간만 업데이트 (퇴근 시간 기록 안함)
+ * - 18시 이후 시스템 종료 시에만 사용
+ * @param {string} userId - 사용자 ID
+ * @param {number} workMinutes - 총 근무 시간 (분)
+ * @returns {Promise<Object>} 업데이트된 기록
+ */
+export async function updateWorkDurationWithoutCheckout(userId, workMinutes) {
+    const today = new Date().toISOString().split('T')[0];
+
+    // 오늘 출퇴근 기록 조회
+    const { data: existing } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('date', today)
+        .single();
+
+    if (!existing) {
+        throw new Error('오늘 출근 기록이 없습니다.');
+    }
+
+    // 근무시간만 업데이트 (check_out은 null로 유지, is_auto_check_out을 true로 설정)
+    const { data, error } = await supabase
+        .from('attendance')
+        .update({
+            work_duration_minutes: workMinutes,
+            is_auto_check_out: true,
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+/**
+ * 퇴근 철회 - 퇴근 상태에서 다시 근무 상태로 변경
+ * @param {string} userId - 사용자 ID
+ * @returns {Promise<Object>} 업데이트된 기록
+ */
+export async function cancelCheckOut(userId) {
+    const today = new Date().toISOString().split('T')[0];
+
+    // 오늘 출퇴근 기록 조회
+    const { data: existing } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('date', today)
+        .single();
+
+    if (!existing) {
+        throw new Error('오늘 출근 기록이 없습니다.');
+    }
+
+    if (!existing.check_out && !existing.work_duration_minutes) {
+        throw new Error('아직 퇴근 처리가 되지 않았습니다.');
+    }
+
+    // check_out을 null로, work_duration_minutes도 null로 초기화
+    const { data, error } = await supabase
+        .from('attendance')
+        .update({
+            check_out: null,
+            is_auto_check_out: false,
+            work_duration_minutes: null,
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+

@@ -13,6 +13,10 @@ export default function HomePage() {
     const [loading, setLoading] = useState(true);
     const [lastUpdate, setLastUpdate] = useState(null);
 
+    // 팝업 상태
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [showModal, setShowModal] = useState(false);
+
     // 데이터 로드
     const loadData = async () => {
         try {
@@ -43,6 +47,11 @@ export default function HomePage() {
         return userRecords.reduce((sum, r) => sum + (r.duration_minutes || 0), 0);
     };
 
+    // 사용자별 자리비움 기록 가져오기
+    const getUserAwayRecords = (userId) => {
+        return awayRecords.filter(r => r.user_id === userId);
+    };
+
     // 현재 자리비움 중인지 확인
     const isCurrentlyAway = (userId) => {
         return awayRecords.some(r => r.user_id === userId && !r.end_time);
@@ -69,11 +78,43 @@ export default function HomePage() {
     };
 
     // 근무 시간 계산
-    const calculateWorkMinutes = (checkIn, checkOut) => {
-        if (!checkIn) return 0;
-        const start = new Date(checkIn);
-        const end = checkOut ? new Date(checkOut) : new Date();
+    // - check_out이 있으면 check_in ~ check_out
+    // - check_out이 없고 work_duration_minutes가 있으면 해당 값 사용 (시스템 종료로 인한 자동 퇴근)
+    // - 둘 다 없으면 현재 시간까지 (오늘 현황용)
+    const calculateWorkMinutes = (record) => {
+        if (!record.check_in) return 0;
+
+        // 퇴근 기록이 있으면 정상 계산
+        if (record.check_out) {
+            const start = new Date(record.check_in);
+            const end = new Date(record.check_out);
+            return Math.round((end - start) / 60000);
+        }
+
+        // 시스템 종료로 인한 자동 퇴근 (work_duration_minutes 기록됨)
+        if (record.work_duration_minutes) {
+            return record.work_duration_minutes;
+        }
+
+        // 근무 중이면 현재 시간까지
+        const start = new Date(record.check_in);
+        const end = new Date();
         return Math.round((end - start) / 60000);
+    };
+
+    // 사용자 클릭 시 팝업 열기
+    const handleUserClick = (record) => {
+        setSelectedUser({
+            ...record,
+            awayRecords: getUserAwayRecords(record.user_id),
+        });
+        setShowModal(true);
+    };
+
+    // 팝업 닫기
+    const closeModal = () => {
+        setShowModal(false);
+        setSelectedUser(null);
     };
 
     // 통계 계산
@@ -147,6 +188,9 @@ export default function HomePage() {
                     {/* 출퇴근 현황 테이블 */}
                     <div className="card">
                         <h2 className="card-title">오늘 출퇴근 현황</h2>
+                        <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                            사용자를 클릭하면 자리비움 상세 내역을 볼 수 있습니다.
+                        </p>
                         <div className="table-container">
                             {attendance.length === 0 ? (
                                 <div className="empty-state">
@@ -170,10 +214,15 @@ export default function HomePage() {
                                             const isAway = isCurrentlyAway(record.user_id);
                                             const isWorking = record.check_in && !record.check_out;
                                             const awayMinutes = getAwayMinutes(record.user_id);
-                                            const workMinutes = calculateWorkMinutes(record.check_in, record.check_out);
+                                            const workMinutes = calculateWorkMinutes(record);
 
                                             return (
-                                                <tr key={record.id}>
+                                                <tr
+                                                    key={record.id}
+                                                    onClick={() => handleUserClick(record)}
+                                                    style={{ cursor: 'pointer' }}
+                                                    className="clickable-row"
+                                                >
                                                     <td>
                                                         <span className={`status-dot ${isAway ? 'away' : isWorking ? 'working' : 'offline'
                                                             }`}></span>
@@ -213,6 +262,76 @@ export default function HomePage() {
                     </div>
                 </>
             )}
+
+            {/* 자리비움 상세보기 팝업 */}
+            {showModal && selectedUser && (
+                <div className="modal-overlay" onClick={closeModal}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>🪑 자리비움 상세 내역</h3>
+                            <button className="modal-close" onClick={closeModal}>✕</button>
+                        </div>
+                        <div className="modal-content">
+                            <div className="modal-user-info">
+                                <strong>{selectedUser.users?.name || '알 수 없음'}</strong>
+                                <span style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>
+                                    {formatTime(selectedUser.check_in)} ~ {selectedUser.check_out ? formatTime(selectedUser.check_out) : '근무중'}
+                                </span>
+                            </div>
+
+                            {selectedUser.awayRecords.length === 0 ? (
+                                <div className="empty-state" style={{ padding: '2rem' }}>
+                                    오늘 자리비움 기록이 없습니다.
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="modal-summary">
+                                        <span>총 자리비움: </span>
+                                        <strong style={{ color: 'var(--color-warning)' }}>
+                                            {formatDuration(getAwayMinutes(selectedUser.user_id))}
+                                        </strong>
+                                        <span style={{ marginLeft: '16px' }}>횟수: </span>
+                                        <strong>{selectedUser.awayRecords.length}회</strong>
+                                    </div>
+                                    <table className="table modal-table">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>시작 시간</th>
+                                                <th>복귀 시간</th>
+                                                <th>소요 시간</th>
+                                                <th>구분</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {selectedUser.awayRecords.map((record, index) => (
+                                                <tr key={record.id}>
+                                                    <td>{index + 1}</td>
+                                                    <td>{formatTime(record.start_time)}</td>
+                                                    <td>
+                                                        {record.end_time ? formatTime(record.end_time) : (
+                                                            <span className="badge badge-warning">진행중</span>
+                                                        )}
+                                                    </td>
+                                                    <td>{record.duration_minutes ? formatDuration(record.duration_minutes) : '-'}</td>
+                                                    <td>
+                                                        {record.is_auto_detected ? (
+                                                            <span className="badge badge-secondary">자동</span>
+                                                        ) : (
+                                                            <span className="badge badge-primary">수동</span>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+

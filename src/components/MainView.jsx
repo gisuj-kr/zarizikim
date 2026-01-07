@@ -16,6 +16,7 @@ function MainView() {
         loading: attendanceLoading,
         checkIn,
         checkOut,
+        cancelCheckOut,
         updateMemo,
         loadTodayAttendance
     } = useAttendanceStore();
@@ -32,6 +33,13 @@ function MainView() {
     const [memo, setMemo] = useState('');
     const [currentTime, setCurrentTime] = useState(new Date());
     const [workDuration, setWorkDuration] = useState(0);
+
+    // check_out이 없을 때 기본 퇴근 시간 (18:00)을 반환
+    const getDefaultEndTime = () => {
+        const today = new Date();
+        today.setHours(18, 0, 0, 0);
+        return today;
+    };
 
     // 데이터 로드
     useEffect(() => {
@@ -86,6 +94,15 @@ function MainView() {
             await checkOut();
         } catch (error) {
             console.error('퇴근 실패:', error);
+        }
+    };
+
+    // 퇴근 철회 (다시 근무 시작)
+    const handleCancelCheckOut = async () => {
+        try {
+            await cancelCheckOut();
+        } catch (error) {
+            console.error('퇴근 철회 실패:', error);
         }
     };
 
@@ -166,7 +183,11 @@ function MainView() {
                                         {formatDuration(
                                             isCheckedIn
                                                 ? workDuration
-                                                : calculateMinutesBetween(todayAttendance.check_in, todayAttendance.check_out)
+                                                : todayAttendance.check_out
+                                                    ? calculateMinutesBetween(todayAttendance.check_in, todayAttendance.check_out)
+                                                    : todayAttendance.work_duration_minutes
+                                                        ? todayAttendance.work_duration_minutes
+                                                        : calculateMinutesBetween(todayAttendance.check_in, getDefaultEndTime())
                                         )}
                                     </span>
                                 </div>
@@ -235,9 +256,18 @@ function MainView() {
                     )}
 
                     {isCheckedOut && (
-                        <div className="checkout-message">
-                            <p>오늘 하루도 수고하셨습니다! 👏</p>
-                        </div>
+                        <>
+                            <div className="checkout-message">
+                                <p>오늘 하루도 수고하셨습니다! 👏</p>
+                            </div>
+                            <button
+                                className="btn btn-primary btn-lg action-btn"
+                                onClick={handleCancelCheckOut}
+                                disabled={loading}
+                            >
+                                🏢 근무시작
+                            </button>
+                        </>
                     )}
                 </div>
 

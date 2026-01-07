@@ -142,6 +142,56 @@ export const useAttendanceStore = create((set, get) => ({
         }
     },
 
+    // 액션: 퇴근 철회 (퇴근 상태에서 다시 근무 상태로)
+    cancelCheckOut: async () => {
+        const user = useUserStore.getState().user;
+        if (!user) return;
+
+        try {
+            set({ loading: true, error: null });
+            const attendance = await attendanceService.cancelCheckOut(user.id);
+            set({ todayAttendance: attendance, loading: false });
+
+            // Electron에 상태 알림 (다시 근무중으로)
+            if (window.electronAPI) {
+                window.electronAPI.updateCheckInStatus(true);
+                window.electronAPI.showNotification(
+                    '근무 재시작',
+                    '퇴근이 철회되어 다시 근무중 상태입니다.'
+                );
+            }
+
+            return attendance;
+        } catch (error) {
+            console.error('퇴근 철회 실패:', error);
+            set({ error: error.message, loading: false });
+            throw error;
+        }
+    },
+
+    // 액션: 시스템 종료 시 근무시간만 업데이트 (퇴근 시간 기록 안함)
+    updateWorkDurationOnly: async (workMinutes) => {
+        const user = useUserStore.getState().user;
+        if (!user) return;
+
+        try {
+            set({ loading: true, error: null });
+            const attendance = await attendanceService.updateWorkDurationWithoutCheckout(user.id, workMinutes);
+            set({ todayAttendance: attendance, loading: false });
+
+            // Electron에 상태 알림
+            if (window.electronAPI) {
+                window.electronAPI.updateCheckInStatus(false);
+            }
+
+            return attendance;
+        } catch (error) {
+            console.error('근무시간 업데이트 실패:', error);
+            set({ error: error.message, loading: false });
+            throw error;
+        }
+    },
+
     // 액션: 상태 초기화
     reset: () => {
         set({
@@ -152,3 +202,4 @@ export const useAttendanceStore = create((set, get) => ({
         });
     },
 }));
+

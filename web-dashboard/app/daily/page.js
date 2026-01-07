@@ -61,10 +61,32 @@ export default function DailyPage() {
     };
 
     // 근무 시간 계산
-    const calculateWorkMinutes = (checkIn, checkOut) => {
-        if (!checkIn || !checkOut) return 0;
-        const start = new Date(checkIn);
-        const end = new Date(checkOut);
+    // - check_out이 있으면 check_in ~ check_out
+    // - check_out이 없고 work_duration_minutes가 있으면 해당 값 사용 (시스템 종료로 인한 자동 퇴근)
+    // - 둘 다 없으면 check_in ~ 18:00 기준으로 계산
+    const calculateWorkMinutes = (record) => {
+        if (!record.check_in) return 0;
+
+        // 퇴근 기록이 있으면 정상 계산
+        if (record.check_out) {
+            const start = new Date(record.check_in);
+            const end = new Date(record.check_out);
+            return Math.round((end - start) / 60000);
+        }
+
+        // 시스템 종료로 인한 자동 퇴근 (work_duration_minutes 기록됨)
+        if (record.work_duration_minutes) {
+            return record.work_duration_minutes;
+        }
+
+        // 둘 다 없으면 18시 기준으로 계산
+        const start = new Date(record.check_in);
+        const end = new Date(record.check_in);
+        end.setHours(18, 0, 0, 0);
+
+        // 출근 시간이 18시 이후면 0 반환
+        if (start >= end) return 0;
+
         return Math.round((end - start) / 60000);
     };
 
@@ -73,7 +95,7 @@ export default function DailyPage() {
         totalUsers: attendance.length,
         avgWorkMinutes: attendance.length > 0
             ? Math.round(attendance.reduce((sum, a) =>
-                sum + calculateWorkMinutes(a.check_in, a.check_out), 0) / attendance.length)
+                sum + calculateWorkMinutes(a), 0) / attendance.length)
             : 0,
         totalAwayMinutes: awayRecords.reduce((sum, r) => sum + (r.duration_minutes || 0), 0),
         avgCheckIn: attendance.length > 0 && attendance.some(a => a.check_in)
@@ -161,7 +183,7 @@ export default function DailyPage() {
                                     <tbody>
                                         {attendance.map(record => {
                                             const awayMinutes = getAwayMinutes(record.user_id);
-                                            const workMinutes = calculateWorkMinutes(record.check_in, record.check_out);
+                                            const workMinutes = calculateWorkMinutes(record);
                                             const netWorkMinutes = workMinutes - awayMinutes;
 
                                             return (
