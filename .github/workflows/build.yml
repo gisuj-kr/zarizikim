@@ -42,7 +42,7 @@ jobs:
 
   # macOS 빌드 (Intel Mac에서 빌드)
   build-macos:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
