@@ -5,9 +5,10 @@
  * - IPC 통신 처리
  */
 
-const { app, BrowserWindow, ipcMain, powerMonitor, Notification, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, powerMonitor, Notification, dialog, shell } = require('electron');
 const path = require('path');
 const { createTray, updateTrayIcon } = require('./tray');
+const { autoUpdater } = require('electron-updater');
 
 // 개발 모드 확인 (app.isPackaged가 가장 신뢰할 수 있는 방법)
 const isDev = !app.isPackaged;
@@ -228,6 +229,76 @@ function showNotification(title, body) {
     }
 }
 
+/**
+ * 자동 업데이트 설정 및 체크
+ */
+function setupAutoUpdater() {
+    // 개발 모드에서는 업데이트 체크 안 함
+    if (isDev) {
+        console.log('개발 모드: 자동 업데이트 비활성화');
+        return;
+    }
+
+    // Windows: 자동 업데이트
+    // macOS: 알림만 표시 (코드 서명 없으면 자동 업데이트 불가)
+    const isMac = process.platform === 'darwin';
+
+    // 업데이트 가능 이벤트
+    autoUpdater.on('update-available', (info) => {
+        console.log('업데이트 가능:', info.version);
+
+        if (isMac) {
+            // macOS: 다운로드 링크 안내 다이얼로그
+            dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: '새 버전 알림',
+                message: `새 버전 ${info.version}이 있습니다!`,
+                detail: '업데이트 방법:\n1. 아래 버튼을 클릭하여 다운로드\n2. ZIP 파일 압축 해제\n3. 앱을 Applications 폴더로 이동 (대체)\n4. 새 앱 실행',
+                buttons: ['다운로드 페이지 열기', '나중에'],
+                defaultId: 0,
+            }).then((result) => {
+                if (result.response === 0) {
+                    // GitHub Release 페이지 열기
+                    shell.openExternal('https://github.com/gisuj-kr/zarizikim/releases/latest');
+                }
+            });
+        } else {
+            // Windows: 자동 다운로드 시작
+            showNotification('업데이트 다운로드 중', `새 버전 ${info.version}을 다운로드하고 있습니다.`);
+        }
+    });
+
+    // 업데이트 없음
+    autoUpdater.on('update-not-available', () => {
+        console.log('최신 버전입니다.');
+    });
+
+    // 다운로드 완료 (Windows만)
+    autoUpdater.on('update-downloaded', (info) => {
+        dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: '업데이트 준비 완료',
+            message: `새 버전 ${info.version} 설치 준비가 완료되었습니다.`,
+            detail: '지금 재시작하여 업데이트를 적용하시겠습니까?',
+            buttons: ['지금 재시작', '나중에'],
+            defaultId: 0,
+        }).then((result) => {
+            if (result.response === 0) {
+                // 퇴근 처리 없이 앱 종료 후 업데이트 설치
+                autoUpdater.quitAndInstall(false, true);
+            }
+        });
+    });
+
+    // 에러 처리
+    autoUpdater.on('error', (err) => {
+        console.error('자동 업데이트 오류:', err);
+    });
+
+    // 업데이트 체크 시작
+    autoUpdater.checkForUpdatesAndNotify();
+}
+
 // 단일 인스턴스 잠금 (앱 중복 실행 방지)
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -254,6 +325,9 @@ if (!gotTheLock) {
 
         // 유휴 상태 모니터링 시작
         startIdleMonitoring();
+
+        // 자동 업데이트 체크
+        setupAutoUpdater();
 
         // 잠자기 모드에서 깨어날 때
         powerMonitor.on('resume', () => {
