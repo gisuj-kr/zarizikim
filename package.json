@@ -1,6 +1,6 @@
 {
     "name": "zarizikim",
-    "version": "1.0.11",
+    "version": "1.0.12",
     "description": "출퇴근 체크 및 자리비움 추적 데스크톱 애플리케이션",
     "main": "electron/main.js",
     "scripts": {
@@ -22,7 +22,7 @@
     "devDependencies": {
         "@vitejs/plugin-react": "^4.2.1",
         "concurrently": "^8.2.2",
-        "electron": "^27.0.0",
+        "electron": "^25.0.0",
         "electron-builder": "^24.9.1",
         "vite": "^5.0.10",
         "wait-on": "^7.2.0"
@@ -39,6 +39,7 @@
     "build": {
         "appId": "com.zarizikim.app",
         "productName": "근퇴기록",
+        "asar": false,
         "directories": {
             "output": "release"
         },
