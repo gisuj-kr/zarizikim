@@ -120,9 +120,11 @@ export default function HomePage() {
     // 통계 계산
     const stats = {
         total: attendance.length,
-        working: attendance.filter(a => a.check_in && !a.check_out).length,
+        // 근무중: check_in 있고, check_out 없고, work_duration_minutes도 없으면 근무중
+        working: attendance.filter(a => a.check_in && !a.check_out && !a.work_duration_minutes).length,
         away: attendance.filter(a => isCurrentlyAway(a.user_id)).length,
-        left: attendance.filter(a => a.check_out).length,
+        // 퇴근: check_out 있거나, work_duration_minutes 있으면 퇴근
+        left: attendance.filter(a => a.check_out || a.work_duration_minutes).length,
     };
 
     const today = new Date().toLocaleDateString('ko-KR', {
@@ -212,7 +214,8 @@ export default function HomePage() {
                                     <tbody>
                                         {attendance.map(record => {
                                             const isAway = isCurrentlyAway(record.user_id);
-                                            const isWorking = record.check_in && !record.check_out;
+                                            // 근무중: check_in 있고, check_out 없고, work_duration_minutes도 없어야 함
+                                            const isWorking = record.check_in && !record.check_out && !record.work_duration_minutes;
                                             const awayMinutes = getAwayMinutes(record.user_id);
                                             const workMinutes = calculateWorkMinutes(record);
 
