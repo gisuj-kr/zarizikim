@@ -164,9 +164,30 @@ function startIdleMonitoring() {
 
         // 10분 이상 유휴 상태이고 아직 자리비움 아니면
         if (idleTime >= IDLE_THRESHOLD && !isAway) {
+            // 10분 전 시간을 자리비움 시작 시간으로 계산
+            let calculatedStartTime = new Date(Date.now() - IDLE_THRESHOLD * 1000);
+
+            // 점심시간 종료 시간 계산
+            const [lunchEndH, lunchEndM] = lunchEndTime.split(':').map(Number);
+            const lunchEndDate = new Date();
+            lunchEndDate.setHours(lunchEndH, lunchEndM, 0, 0);
+
+            // 계산된 시작 시간이 점심시간 안이면, 점심시간 종료 시간으로 조정
+            if (calculatedStartTime < lunchEndDate && new Date() >= lunchEndDate) {
+                const now = new Date();
+                const minutesSinceLunchEnd = Math.floor((now - lunchEndDate) / 60000);
+
+                // 점심시간 종료 후 10분 미만이면 아직 자리비움 기록 안 함
+                if (minutesSinceLunchEnd < 10) {
+                    return;
+                }
+
+                // 10분 이상이면 점심시간 종료 시간을 시작으로 설정
+                calculatedStartTime = lunchEndDate;
+            }
+
             isAway = true;
-            // 10분 전 시간을 자리비움 시작 시간으로 기록
-            awayStartTime = new Date(Date.now() - IDLE_THRESHOLD * 1000);
+            awayStartTime = calculatedStartTime;
 
             // 렌더러에 자동 자리비움 시작 알림
             if (mainWindow && mainWindow.webContents) {
