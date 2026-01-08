@@ -489,6 +489,11 @@ ipcMain.on('away-status', (event, status) => {
     }
 });
 
+// 앱 버전 반환
+ipcMain.handle('get-app-version', () => {
+    return app.getVersion();
+});
+
 // 렌더러 초기화 완료 신호 수신
 ipcMain.on('renderer-ready', (event, { isAlreadyCheckedIn, checkInTime }) => {
     isRendererReady = true;

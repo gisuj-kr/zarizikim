@@ -103,6 +103,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.send('check-out-complete');
     },
 
+    /**
+     * 앱 버전 가져오기
+     */
+    getAppVersion: () => {
+        return ipcRenderer.invoke('get-app-version');
+    },
+
     // ===== 리스너 제거 =====
 
     /**

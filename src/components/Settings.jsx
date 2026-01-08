@@ -29,10 +29,20 @@ function Settings() {
         workEndTime: '18:00',
     });
 
+    // 앱 버전 상태
+    const [appVersion, setAppVersion] = useState('1.0.0');
+
     // 초기 데이터 로드
     useEffect(() => {
         if (user) {
             setName(user.name);
+        }
+
+        // Electron에서 앱 버전 가져오기
+        if (window.electronAPI && window.electronAPI.getAppVersion) {
+            window.electronAPI.getAppVersion().then((version) => {
+                setAppVersion(version);
+            });
         }
 
         // 로컬 스토리지에서 설정 로드
@@ -309,7 +319,7 @@ function Settings() {
                 {/* 앱 정보 */}
                 <div className="card settings-section">
                     <h2 className="settings-section-title">앱 정보</h2>
-                    <p className="app-info">근퇴기록 v1.0.0</p>
+                    <p className="app-info">근퇴기록 v{appVersion}</p>
                     <p className="app-desc">출퇴근 및 자리비움 관리 애플리케이션</p>
                 </div>
             </div>
