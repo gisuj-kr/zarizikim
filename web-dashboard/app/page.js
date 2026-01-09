@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getTodayAttendance, getTodayAwayRecords } from '../lib/supabase';
+import { getTodayAttendance, getTodayAwayRecords, deleteAwayRecord, updateAwayRecord } from '../lib/supabase';
 
 export default function HomePage() {
     const [attendance, setAttendance] = useState([]);
@@ -16,6 +16,9 @@ export default function HomePage() {
     // 팝업 상태
     const [selectedUser, setSelectedUser] = useState(null);
     const [showModal, setShowModal] = useState(false);
+
+    // 미처리 출근 정리 상태
+    const [cleanupLoading, setCleanupLoading] = useState(false);
 
     // 데이터 로드
     const loadData = async () => {
@@ -41,15 +44,43 @@ export default function HomePage() {
         return () => clearInterval(interval);
     }, []);
 
+    // 미처리 출근 기록 수동 정리
+    const handleCleanupAttendance = async () => {
+        if (!confirm('모든 미처리 출근 기록을 정리하시겠습니까?\n(전날 이전 기록이 18시 기준 근무시간으로 자동 처리됩니다)')) {
+            return;
+        }
+
+        setCleanupLoading(true);
+        try {
+            const response = await fetch('/api/cron/cleanup-attendance');
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(`처리 완료!\n${result.message}`);
+                // 데이터 새로고침
+                await loadData();
+            } else {
+                alert(`오류 발생: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('미처리 출근 정리 오류:', error);
+            alert('오류가 발생했습니다.');
+        } finally {
+            setCleanupLoading(false);
+        }
+    };
+
     // 사용자별 자리비움 시간 합계 계산
     const getAwayMinutes = (userId) => {
         const userRecords = awayRecords.filter(r => r.user_id === userId && r.duration_minutes);
         return userRecords.reduce((sum, r) => sum + (r.duration_minutes || 0), 0);
     };
 
-    // 사용자별 자리비움 기록 가져오기
+    // 사용자별 자리비움 기록 가져오기 (시간순 정렬)
     const getUserAwayRecords = (userId) => {
-        return awayRecords.filter(r => r.user_id === userId);
+        return awayRecords
+            .filter(r => r.user_id === userId)
+            .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
     };
 
     // 현재 자리비움 중인지 확인
@@ -109,12 +140,107 @@ export default function HomePage() {
             awayRecords: getUserAwayRecords(record.user_id),
         });
         setShowModal(true);
+        setEditingRecord(null);
     };
 
     // 팝업 닫기
     const closeModal = () => {
         setShowModal(false);
         setSelectedUser(null);
+        setEditingRecord(null);
+    };
+
+    // 수정 중인 자리비움 기록
+    const [editingRecord, setEditingRecord] = useState(null);
+
+    // 자리비움 기록 삭제
+    const handleDeleteAwayRecord = async (recordId) => {
+        if (!confirm('이 자리비움 기록을 삭제하시겠습니까?')) return;
+
+        try {
+            await deleteAwayRecord(recordId);
+            // 데이터 새로고침
+            await loadData();
+            // selectedUser의 awayRecords 업데이트
+            if (selectedUser) {
+                setSelectedUser({
+                    ...selectedUser,
+                    awayRecords: selectedUser.awayRecords.filter(r => r.id !== recordId),
+                });
+            }
+        } catch (error) {
+            console.error('삭제 실패:', error);
+            alert('삭제에 실패했습니다.');
+        }
+    };
+
+    // 자리비움 기록 수정 시작
+    const handleEditStart = (record) => {
+        setEditingRecord({
+            ...record,
+            editStartTime: formatTimeForInput(record.start_time),
+            editEndTime: record.end_time ? formatTimeForInput(record.end_time) : '',
+        });
+    };
+
+    // 시간 input용 포맷 (HH:MM)
+    const formatTimeForInput = (dateStr) => {
+        const date = new Date(dateStr);
+        return date.toTimeString().slice(0, 5);
+    };
+
+    // 자리비움 기록 수정 저장
+    const handleEditSave = async () => {
+        if (!editingRecord) return;
+
+        try {
+            // 날짜 부분 유지하면서 시간만 변경
+            const originalDate = new Date(editingRecord.start_time).toISOString().split('T')[0];
+            const newStartTime = new Date(`${originalDate}T${editingRecord.editStartTime}:00`);
+            const newEndTime = editingRecord.editEndTime
+                ? new Date(`${originalDate}T${editingRecord.editEndTime}:00`)
+                : null;
+
+            await updateAwayRecord(
+                editingRecord.id,
+                newStartTime.toISOString(),
+                newEndTime ? newEndTime.toISOString() : null
+            );
+
+            // 데이터 새로고침
+            await loadData();
+            setEditingRecord(null);
+
+            // selectedUser의 awayRecords 업데이트
+            if (selectedUser) {
+                const updatedRecords = selectedUser.awayRecords.map(r => {
+                    if (r.id === editingRecord.id) {
+                        const durationMinutes = newEndTime
+                            ? Math.round((newEndTime - newStartTime) / 60000)
+                            : null;
+                        return {
+                            ...r,
+                            start_time: newStartTime.toISOString(),
+                            end_time: newEndTime ? newEndTime.toISOString() : null,
+                            duration_minutes: durationMinutes,
+                        };
+                    }
+                    return r;
+                });
+                setSelectedUser({
+                    ...selectedUser,
+                    awayRecords: updatedRecords,
+                });
+            }
+        } catch (error) {
+            console.error('수정 실패:', error);
+            alert('수정에 실패했습니다.');
+        }
+    };
+
+    // 수정 취소
+    const handleEditCancel = () => {
+        setEditingRecord(null);
     };
 
     // 통계 계산
@@ -151,9 +277,19 @@ export default function HomePage() {
 
             {/* 네비게이션 */}
             <nav className="nav">
-                <Link href="/" className="nav-link active">오늘 현황</Link>
-                <Link href="/daily" className="nav-link">일별 조회</Link>
-                <Link href="/users" className="nav-link">사용자별</Link>
+                <div className="nav-links">
+                    <Link href="/" className="nav-link active">오늘 현황</Link>
+                    <Link href="/daily" className="nav-link">일별 조회</Link>
+                    <Link href="/users" className="nav-link">사용자별</Link>
+                </div>
+                <button
+                    className="btn btn-warning"
+                    onClick={handleCleanupAttendance}
+                    disabled={cleanupLoading}
+                    title="전날 이전 미처리 출근 기록을 18시 기준으로 자동 처리합니다"
+                >
+                    {cleanupLoading ? '처리 중...' : '🔧 미처리 출근 정리'}
+                </button>
             </nav>
 
             {loading ? (
@@ -304,16 +440,43 @@ export default function HomePage() {
                                                 <th>복귀 시간</th>
                                                 <th>소요 시간</th>
                                                 <th>구분</th>
+                                                <th>관리</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {selectedUser.awayRecords.map((record, index) => (
                                                 <tr key={record.id}>
                                                     <td>{index + 1}</td>
-                                                    <td>{formatTime(record.start_time)}</td>
                                                     <td>
-                                                        {record.end_time ? formatTime(record.end_time) : (
-                                                            <span className="badge badge-warning">진행중</span>
+                                                        {editingRecord?.id === record.id ? (
+                                                            <input
+                                                                type="time"
+                                                                value={editingRecord.editStartTime}
+                                                                onChange={(e) => setEditingRecord({
+                                                                    ...editingRecord,
+                                                                    editStartTime: e.target.value
+                                                                })}
+                                                                className="input time-input-small"
+                                                            />
+                                                        ) : (
+                                                            formatTime(record.start_time)
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        {editingRecord?.id === record.id ? (
+                                                            <input
+                                                                type="time"
+                                                                value={editingRecord.editEndTime}
+                                                                onChange={(e) => setEditingRecord({
+                                                                    ...editingRecord,
+                                                                    editEndTime: e.target.value
+                                                                })}
+                                                                className="input time-input-small"
+                                                            />
+                                                        ) : (
+                                                            record.end_time ? formatTime(record.end_time) : (
+                                                                <span className="badge badge-warning">진행중</span>
+                                                            )
                                                         )}
                                                     </td>
                                                     <td>{record.duration_minutes ? formatDuration(record.duration_minutes) : '-'}</td>
@@ -322,6 +485,43 @@ export default function HomePage() {
                                                             <span className="badge badge-secondary">자동</span>
                                                         ) : (
                                                             <span className="badge badge-primary">수동</span>
+                                                        )}
+                                                    </td>
+                                                    <td>
+                                                        {editingRecord?.id === record.id ? (
+                                                            <div className="action-buttons">
+                                                                <button
+                                                                    className="btn btn-sm btn-success"
+                                                                    onClick={handleEditSave}
+                                                                    title="저장"
+                                                                >
+                                                                    ✓
+                                                                </button>
+                                                                <button
+                                                                    className="btn btn-sm btn-secondary"
+                                                                    onClick={handleEditCancel}
+                                                                    title="취소"
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="action-buttons">
+                                                                <button
+                                                                    className="btn btn-sm btn-secondary"
+                                                                    onClick={() => handleEditStart(record)}
+                                                                    title="수정"
+                                                                >
+                                                                    ✎
+                                                                </button>
+                                                                <button
+                                                                    className="btn btn-sm btn-danger"
+                                                                    onClick={() => handleDeleteAwayRecord(record.id)}
+                                                                    title="삭제"
+                                                                >
+                                                                    🗑
+                                                                </button>
+                                                            </div>
                                                         )}
                                                     </td>
                                                 </tr>

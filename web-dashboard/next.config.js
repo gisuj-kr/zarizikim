@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    output: 'export', // 정적 빌드 (배포 용이)
+    // output: 'export', // 서버 모드로 변경 (API 라우트 사용)
     trailingSlash: true,
     images: {
         unoptimized: true,

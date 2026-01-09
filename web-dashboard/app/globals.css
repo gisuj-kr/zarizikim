@@ -64,8 +64,15 @@ body {
 /* 네비게이션 */
 .nav {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: 8px;
   margin-bottom: 24px;
+}
+
+.nav-links {
+  display: flex;
+  gap: 8px;
 }
 
 .nav-link {
@@ -373,4 +380,124 @@ input[type="date"] {
 .badge-primary {
   background-color: rgba(79, 70, 229, 0.2);
   color: var(--color-primary);
+}
+
+/* 버튼 */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+}
+
+.btn-success {
+  background-color: var(--color-success);
+  color: white;
+}
+
+.btn-success:hover {
+  opacity: 0.9;
+}
+
+.btn-danger {
+  background-color: var(--color-danger);
+  color: white;
+}
+
+.btn-danger:hover {
+  opacity: 0.9;
+}
+
+.btn-warning {
+  background-color: var(--color-warning);
+  color: #000;
+}
+
+.btn-warning:hover {
+  opacity: 0.9;
+}
+
+.btn-warning:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+/* 액션 버튼 그룹 */
+.action-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+/* 시간 입력 (작은 크기) */
+.time-input-small {
+  width: 100px;
+  padding: 4px 8px !important;
+  font-size: 0.875rem !important;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  color-scheme: dark;
+}
+
+/* 시간 입력 필드 아이콘 색상 (webkit) */
+.time-input-small::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+/* 시간 입력 필드 포커스 */
+.time-input-small:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+/* 시간 입력 필드 내부 아이콘들 (시간 선택기 내부) */
+input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+input[type="time"]::-webkit-datetime-edit-text,
+input[type="time"]::-webkit-datetime-edit-hour-field,
+input[type="time"]::-webkit-datetime-edit-minute-field,
+input[type="time"]::-webkit-datetime-edit-second-field,
+input[type="time"]::-webkit-datetime-edit-ampm-field {
+  color: var(--text-primary);
+}
+
+/* 시간 선택기 스피너 버튼 */
+input[type="time"]::-webkit-inner-spin-button,
+input[type="time"]::-webkit-outer-spin-button {
+  filter: invert(1);
+}
+
+/* 입력 필드 */
+.input {
+  padding: 8px 12px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
 }

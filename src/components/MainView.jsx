@@ -209,10 +209,6 @@ function MainView() {
                                 <span className="status-item-label">오늘 자리비움</span>
                                 <span className="status-item-value">{todayRecords.length}회</span>
                             </div>
-                            <div className="status-item">
-                                <span className="status-item-label">총 시간</span>
-                                <span className="status-item-value">{formatDuration(awayMinutes)}</span>
-                            </div>
                             {currentAway && (
                                 <div className="status-item">
                                     <span className="status-item-label">시작</span>

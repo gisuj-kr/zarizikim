@@ -103,3 +103,16 @@ export function isCurrentHour(hour) {
 export function getKoreanTime() {
     return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Seoul' }));
 }
+
+/**
+ * 로컬 시간 기준으로 오늘 날짜를 YYYY-MM-DD 형식으로 반환
+ * (toISOString()은 UTC 기준이라 한국 시간 오전 9시 이전에는 어제 날짜로 인식됨)
+ * @returns {string} YYYY-MM-DD 형식의 오늘 날짜
+ */
+export function getLocalDateString() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}

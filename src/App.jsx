@@ -13,6 +13,7 @@ import Settings from './components/Settings';
 import { useUserStore } from './stores/userStore';
 import { useAttendanceStore } from './stores/attendanceStore';
 import { useAwayStore } from './stores/awayStore';
+import { handleUnprocessedAttendance } from './services/attendance';
 
 function App() {
     const { user, isInitialized, loadUser } = useUserStore();
@@ -28,6 +29,31 @@ function App() {
         };
         init();
     }, [loadUser]);
+
+    // 앱 시작 시 미처리된 과거 출근 기록 자동 처리
+    useEffect(() => {
+        const checkUnprocessed = async () => {
+            if (!user) return;
+
+            try {
+                const processed = await handleUnprocessedAttendance(user.id);
+                if (processed) {
+                    console.log('미처리 출근 기록 자동 처리됨:', processed);
+                    // 알림 표시
+                    if (window.electronAPI) {
+                        window.electronAPI.showNotification(
+                            '미처리 출근 기록 처리',
+                            `${processed.date} 출근 기록이 자동으로 처리되었습니다.`
+                        );
+                    }
+                }
+            } catch (error) {
+                console.error('미처리 출근 기록 처리 오류:', error);
+            }
+        };
+
+        checkUnprocessed();
+    }, [user]);
 
     // Electron IPC 이벤트 리스너 설정
     useEffect(() => {

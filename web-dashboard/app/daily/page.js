@@ -8,7 +8,16 @@ import Link from 'next/link';
 import { getAttendanceByDate, getAwayRecordsByDate } from '../../lib/supabase';
 
 export default function DailyPage() {
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    // 로컬 시간 기준 오늘 날짜
+    const getLocalDateString = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    const [date, setDate] = useState(getLocalDateString());
     const [attendance, setAttendance] = useState([]);
     const [awayRecords, setAwayRecords] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -114,7 +123,7 @@ export default function DailyPage() {
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    max={new Date().toISOString().split('T')[0]}
+                    max={getLocalDateString()}
                 />
             </header>
 
