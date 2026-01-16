@@ -25,8 +25,26 @@ export async function checkIn(userId, isAuto = false, memo = '') {
         .single();
 
     if (existing) {
-        // 이미 출근 기록이 있으면 업데이트하지 않음
+        // 이미 출근 기록이 있는 경우
         if (existing.check_in) {
+            // 퇴근 처리가 된 상태면 (check_out 또는 work_duration_minutes가 있으면)
+            // 퇴근 철회하여 다시 근무 시작
+            if (existing.check_out || existing.work_duration_minutes) {
+                const { data, error } = await supabase
+                    .from('attendance')
+                    .update({
+                        check_out: null,
+                        is_auto_check_out: false,
+                        work_duration_minutes: null,
+                    })
+                    .eq('id', existing.id)
+                    .select()
+                    .single();
+
+                if (error) throw error;
+                return data;
+            }
+            // 아직 근무 중이면 기존 기록 반환
             return existing;
         }
 

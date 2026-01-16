@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    // output: 'export', // 서버 모드로 변경 (API 라우트 사용)
+    // output: 'export', // PM2 서버 모드 사용 (API 라우트 필요)
     trailingSlash: true,
     images: {
         unoptimized: true,

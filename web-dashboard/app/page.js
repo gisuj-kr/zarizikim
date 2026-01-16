@@ -5,13 +5,15 @@
  */
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getTodayAttendance, getTodayAwayRecords, deleteAwayRecord, updateAwayRecord } from '../lib/supabase';
+import { getTodayAttendance, getTodayAwayRecords, deleteAwayRecord, updateAwayRecord, getAllUsers } from '../lib/supabase';
 
 export default function HomePage() {
+    const [users, setUsers] = useState([]);  // 전체 사용자 목록
     const [attendance, setAttendance] = useState([]);
     const [awayRecords, setAwayRecords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [lastUpdate, setLastUpdate] = useState(null);
+    const [today, setToday] = useState('');  // hydration 불일치 방지를 위해 클라이언트에서 설정
 
     // 팝업 상태
     const [selectedUser, setSelectedUser] = useState(null);
@@ -23,10 +25,12 @@ export default function HomePage() {
     // 데이터 로드
     const loadData = async () => {
         try {
-            const [attendanceData, awayData] = await Promise.all([
+            const [usersData, attendanceData, awayData] = await Promise.all([
+                getAllUsers(),
                 getTodayAttendance(),
                 getTodayAwayRecords(),
             ]);
+            setUsers(usersData);
             setAttendance(attendanceData);
             setAwayRecords(awayData);
             setLastUpdate(new Date());
@@ -39,6 +43,13 @@ export default function HomePage() {
 
     // 초기 로드 및 1분마다 자동 새로고침
     useEffect(() => {
+        // 클라이언트에서만 날짜 설정 (hydration 불일치 방지)
+        setToday(new Date().toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            weekday: 'long',
+        }));
         loadData();
         const interval = setInterval(loadData, 60000);
         return () => clearInterval(interval);
@@ -68,6 +79,11 @@ export default function HomePage() {
         } finally {
             setCleanupLoading(false);
         }
+    };
+
+    // 사용자별 출근 기록 가져오기
+    const getUserAttendance = (userId) => {
+        return attendance.find(a => a.user_id === userId);
     };
 
     // 사용자별 자리비움 시간 합계 계산
@@ -108,36 +124,89 @@ export default function HomePage() {
         return `${hours}시간 ${mins}분`;
     };
 
-    // 근무 시간 계산
+    // 점심시간 설정 (기본값: 11:30 ~ 13:00)
+    const LUNCH_START_HOUR = 11;
+    const LUNCH_START_MIN = 30;
+    const LUNCH_END_HOUR = 13;
+    const LUNCH_END_MIN = 0;
+
+    // 점심시간(분) 계산 - 근무시간과 겹치는 부분만 계산
+    const calculateLunchMinutes = (checkInTime, checkOutTime) => {
+        const checkIn = new Date(checkInTime);
+        const checkOut = new Date(checkOutTime);
+
+        const lunchStart = new Date(checkIn);
+        lunchStart.setHours(LUNCH_START_HOUR, LUNCH_START_MIN, 0, 0);
+
+        const lunchEnd = new Date(checkIn);
+        lunchEnd.setHours(LUNCH_END_HOUR, LUNCH_END_MIN, 0, 0);
+
+        // 점심시간이 근무시간과 겹치는지 확인
+        if (checkIn >= lunchEnd || checkOut <= lunchStart) {
+            return 0;
+        }
+
+        // 겹치는 시간 계산
+        const overlapStart = checkIn > lunchStart ? checkIn : lunchStart;
+        const overlapEnd = checkOut < lunchEnd ? checkOut : lunchEnd;
+
+        return Math.max(0, Math.round((overlapEnd - overlapStart) / 60000));
+    };
+
+    // 근무 시간 계산 (점심시간 차감 포함)
+    // - 09:00 이전 출근 시 09:00부터 계산
     // - check_out이 있으면 check_in ~ check_out
-    // - check_out이 없고 work_duration_minutes가 있으면 해당 값 사용 (시스템 종료로 인한 자동 퇴근)
+    // - check_out이 없고 work_duration_minutes가 있으면 18시 기준 계산 (시스템 종료로 인한 자동 퇴근)
     // - 둘 다 없으면 현재 시간까지 (오늘 현황용)
     const calculateWorkMinutes = (record) => {
         if (!record.check_in) return 0;
 
+        let startTime = new Date(record.check_in);
+        let endTime;
+
+        // 09:00 이전 출근 시 09:00부터 계산
+        const workStartTime = new Date(startTime);
+        workStartTime.setHours(9, 0, 0, 0);
+        if (startTime < workStartTime) {
+            startTime = workStartTime;
+        } else {
+            // 09:00 이후 출근이라도 초/밀리초는 0으로 맞춤 (정확한 분 단위 계산)
+            startTime.setSeconds(0, 0);
+        }
+
         // 퇴근 기록이 있으면 정상 계산
         if (record.check_out) {
-            const start = new Date(record.check_in);
-            const end = new Date(record.check_out);
-            return Math.round((end - start) / 60000);
+            endTime = new Date(record.check_out);
         }
-
-        // 시스템 종료로 인한 자동 퇴근 (work_duration_minutes 기록됨)
-        if (record.work_duration_minutes) {
-            return record.work_duration_minutes;
+        // 시스템 종료로 인한 자동 퇴근 (work_duration_minutes 기록됨) - 18시 기준
+        else if (record.is_auto_check_out || record.work_duration_minutes) {
+            endTime = new Date(startTime);
+            endTime.setHours(18, 0, 0, 0);
+            if (startTime >= endTime) return 0;
         }
-
         // 근무 중이면 현재 시간까지
-        const start = new Date(record.check_in);
-        const end = new Date();
-        return Math.round((end - start) / 60000);
+        else {
+            endTime = new Date();
+        }
+
+        // 총 근무 시간 계산
+        let totalMinutes = Math.round((endTime - startTime) / 60000);
+
+        // 점심시간 차감
+        const lunchMinutes = calculateLunchMinutes(startTime, endTime);
+        totalMinutes -= lunchMinutes;
+
+        return Math.max(0, totalMinutes);
     };
 
     // 사용자 클릭 시 팝업 열기
-    const handleUserClick = (record) => {
+    const handleUserClick = (user, attendanceRecord) => {
         setSelectedUser({
-            ...record,
-            awayRecords: getUserAwayRecords(record.user_id),
+            user_id: user.id,
+            users: user,
+            check_in: attendanceRecord?.check_in,
+            check_out: attendanceRecord?.check_out,
+            awayRecords: getUserAwayRecords(user.id),
         });
         setShowModal(true);
         setEditingRecord(null);
@@ -245,20 +314,15 @@ export default function HomePage() {
 
     // 통계 계산
     const stats = {
-        total: attendance.length,
+        total: users.length,  // 전체 등록 사용자
+        checked_in: attendance.length,  // 금일 출근
+        not_checked_in: users.length - attendance.length,  // 미출근
         // 근무중: check_in 있고, check_out 없고, work_duration_minutes도 없으면 근무중
         working: attendance.filter(a => a.check_in && !a.check_out && !a.work_duration_minutes).length,
         away: attendance.filter(a => isCurrentlyAway(a.user_id)).length,
         // 퇴근: check_out 있거나, work_duration_minutes 있으면 퇴근
         left: attendance.filter(a => a.check_out || a.work_duration_minutes).length,
     };
-
-    const today = new Date().toLocaleDateString('ko-KR', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        weekday: 'long',
-    });
 
     return (
         <div className="container">
@@ -303,7 +367,13 @@ export default function HomePage() {
                     <div className="stats-grid">
                         <div className="stat-card">
                             <div className="stat-value">{stats.total}</div>
-                            <div className="stat-label">총 출근</div>
+                            <div className="stat-label">전체 인원</div>
+                        </div>
+                        <div className="stat-card">
+                            <div className="stat-value" style={{ color: 'var(--text-muted)' }}>
+                                {stats.not_checked_in}
+                            </div>
+                            <div className="stat-label">미출근</div>
                         </div>
                         <div className="stat-card">
                             <div className="stat-value" style={{ color: 'var(--color-success)' }}>
@@ -330,9 +400,9 @@ export default function HomePage() {
                             사용자를 클릭하면 자리비움 상세 내역을 볼 수 있습니다.
                         </p>
                         <div className="table-container">
-                            {attendance.length === 0 ? (
+                            {users.length === 0 ? (
                                 <div className="empty-state">
-                                    아직 출근한 사용자가 없습니다.
+                                    등록된 사용자가 없습니다.
                                 </div>
                             ) : (
                                 <table className="table">
@@ -348,48 +418,67 @@ export default function HomePage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {attendance.map(record => {
-                                            const isAway = isCurrentlyAway(record.user_id);
-                                            // 근무중: check_in 있고, check_out 없고, work_duration_minutes도 없어야 함
-                                            const isWorking = record.check_in && !record.check_out && !record.work_duration_minutes;
-                                            const awayMinutes = getAwayMinutes(record.user_id);
-                                            const workMinutes = calculateWorkMinutes(record);
+                                        {users.map(user => {
+                                            const record = getUserAttendance(user.id);
+                                            const hasAttendance = !!record;
+                                            const isAway = hasAttendance && isCurrentlyAway(user.id);
+                                            // 근무중: 출근 기록이 있고, check_out 없고, work_duration_minutes도 없어야 함
+                                            const isWorking = hasAttendance && record.check_in && !record.check_out && !record.work_duration_minutes;
+                                            const isLeft = hasAttendance && (record.check_out || record.work_duration_minutes);
+                                            const awayMinutes = getAwayMinutes(user.id);
+                                            const workMinutes = hasAttendance ? calculateWorkMinutes(record) : 0;
+
+                                            // 상태 결정: 미출근 > 자리비움 > 근무중 > 퇴근
+                                            let statusClass = '';
+                                            let statusText = '';
+                                            if (!hasAttendance) {
+                                                statusClass = 'not-checked';
+                                                statusText = '미출근';
+                                            } else if (isAway) {
+                                                statusClass = 'away';
+                                                statusText = '자리비움';
+                                            } else if (isWorking) {
+                                                statusClass = 'working';
+                                                statusText = '근무중';
+                                            } else {
+                                                statusClass = 'offline';
+                                                statusText = '퇴근';
+                                            }
 
                                             return (
                                                 <tr
-                                                    key={record.id}
-                                                    onClick={() => handleUserClick(record)}
+                                                    key={user.id}
+                                                    onClick={() => handleUserClick(user, record)}
                                                     style={{ cursor: 'pointer' }}
                                                     className="clickable-row"
                                                 >
                                                     <td>
-                                                        <span className={`status-dot ${isAway ? 'away' : isWorking ? 'working' : 'offline'
-                                                            }`}></span>
-                                                        {isAway ? '자리비움' : isWorking ? '근무중' : '퇴근'}
+                                                        <span className={`status-dot ${statusClass}`}></span>
+                                                        {statusText}
                                                     </td>
-                                                    <td><strong>{record.users?.name || '알 수 없음'}</strong></td>
+                                                    <td><strong>{user.name || '알 수 없음'}</strong></td>
                                                     <td>
-                                                        {formatTime(record.check_in)}
-                                                        {record.is_auto_check_in && (
+                                                        {hasAttendance ? formatTime(record.check_in) : '-'}
+                                                        {record?.is_auto_check_in && (
                                                             <span className="badge badge-secondary" style={{ marginLeft: '4px' }}>
                                                                 자동
                                                             </span>
                                                         )}
                                                     </td>
                                                     <td>
-                                                        {record.check_out ? formatTime(record.check_out) : '-'}
-                                                        {record.is_auto_check_out && (
+                                                        {hasAttendance && record.check_out ? formatTime(record.check_out) : '-'}
+                                                        {record?.is_auto_check_out && (
                                                             <span className="badge badge-secondary" style={{ marginLeft: '4px' }}>
                                                                 자동
                                                             </span>
                                                         )}
                                                     </td>
-                                                    <td>{formatDuration(workMinutes)}</td>
+                                                    <td>{hasAttendance ? formatDuration(workMinutes) : '-'}</td>
                                                     <td style={{ color: awayMinutes > 60 ? 'var(--color-warning)' : 'inherit' }}>
-                                                        {formatDuration(awayMinutes)}
+                                                        {hasAttendance ? formatDuration(awayMinutes) : '-'}
                                                     </td>
                                                     <td style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        {record.memo || '-'}
+                                                        {record?.memo || '-'}
                                                     </td>
                                                 </tr>
                                             );

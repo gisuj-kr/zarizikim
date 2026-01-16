@@ -88,34 +88,75 @@ export default function UsersPage() {
         return `${hours}시간 ${mins}분`;
     };
 
-    // 근무 시간 계산
+    // 점심시간 설정 (기본값: 11:30 ~ 13:00)
+    const LUNCH_START_HOUR = 11;
+    const LUNCH_START_MIN = 30;
+    const LUNCH_END_HOUR = 13;
+    const LUNCH_END_MIN = 0;
+
+    // 점심시간(분) 계산 - 근무시간과 겹치는 부분만 계산
+    const calculateLunchMinutes = (checkInTime, checkOutTime) => {
+        const checkIn = new Date(checkInTime);
+        const checkOut = new Date(checkOutTime);
+
+        const lunchStart = new Date(checkIn);
+        lunchStart.setHours(LUNCH_START_HOUR, LUNCH_START_MIN, 0, 0);
+
+        const lunchEnd = new Date(checkIn);
+        lunchEnd.setHours(LUNCH_END_HOUR, LUNCH_END_MIN, 0, 0);
+
+        // 점심시간이 근무시간과 겹치는지 확인
+        if (checkIn >= lunchEnd || checkOut <= lunchStart) {
+            return 0;
+        }
+
+        // 겹치는 시간 계산
+        const overlapStart = checkIn > lunchStart ? checkIn : lunchStart;
+        const overlapEnd = checkOut < lunchEnd ? checkOut : lunchEnd;
+
+        return Math.max(0, Math.round((overlapEnd - overlapStart) / 60000));
+    };
+
+    // 근무 시간 계산 (점심시간 차감 포함)
+    // - 09:00 이전 출근 시 09:00부터 계산
     // - check_out이 있으면 check_in ~ check_out
-    // - check_out이 없고 work_duration_minutes가 있으면 해당 값 사용 (시스템 종료로 인한 자동 퇴근)
-    // - 둘 다 없으면 check_in ~ 18:00 기준으로 계산
+    // - check_out이 없고 work_duration_minutes가 있으면 18시 기준 계산 (시스템 종료로 인한 자동 퇴근)
+    // - 둘 다 없으면 18시 기준으로 계산
     const calculateWorkMinutes = (record) => {
         if (!record.check_in) return 0;
 
+        let startTime = new Date(record.check_in);
+        let endTime;
+
+        // 09:00 이전 출근 시 09:00부터 계산
+        const workStartTime = new Date(startTime);
+        workStartTime.setHours(9, 0, 0, 0);
+        if (startTime < workStartTime) {
+            startTime = workStartTime;
+        } else {
+            // 09:00 이후 출근이라도 초/밀리초는 0으로 맞춤 (정확한 분 단위 계산)
+            startTime.setSeconds(0, 0);
+        }
+
         // 퇴근 기록이 있으면 정상 계산
         if (record.check_out) {
-            const start = new Date(record.check_in);
-            const end = new Date(record.check_out);
-            return Math.round((end - start) / 60000);
+            endTime = new Date(record.check_out);
+        }
+        // 시스템 종료로 인한 자동 퇴근 또는 둘 다 없으면 18시 기준
+        else {
+            endTime = new Date(startTime);
+            endTime.setHours(18, 0, 0, 0);
+            if (startTime >= endTime) return 0;
         }
 
-        // 시스템 종료로 인한 자동 퇴근 (work_duration_minutes 기록됨)
-        if (record.work_duration_minutes) {
-            return record.work_duration_minutes;
-        }
+        // 총 근무 시간 계산
+        let totalMinutes = Math.round((endTime - startTime) / 60000);
 
-        // 둘 다 없으면 18시 기준으로 계산
-        const start = new Date(record.check_in);
-        const end = new Date(record.check_in);
-        end.setHours(18, 0, 0, 0);
+        // 점심시간 차감
+        const lunchMinutes = calculateLunchMinutes(startTime, endTime);
+        totalMinutes -= lunchMinutes;
 
-        // 출근 시간이 18시 이후면 0 반환
-        if (start >= end) return 0;
-
-        return Math.round((end - start) / 60000);
+        return Math.max(0, totalMinutes);
     };
 
     // 날짜별 자리비움 기록 가져오기
@@ -150,13 +191,12 @@ export default function UsersPage() {
 
     // 통계 계산
     const calculateStats = () => {
-        // check_out이 있거나 work_duration_minutes가 있는 날만 출근일로 계산
-        const workDays = history.filter(h => h.check_in && (h.check_out || h.work_duration_minutes)).length;
+        // check_in이 있는 모든 날을 출근일로 계산 (근무시간이 계산되는 모든 날)
+        const workDays = history.filter(h => h.check_in).length;
         let totalWorkMinutes = 0;
         let totalAwayMinutes = 0;
 
         history.forEach(h => {
-            // check_out이 있거나 work_duration_minutes가 있으면 유효한 근무 기록
             const workMin = calculateWorkMinutes(h);
             if (workMin > 0) {
                 totalWorkMinutes += workMin;
