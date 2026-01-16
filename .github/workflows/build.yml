@@ -38,7 +38,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/*.yml
 
   # macOS 빌드 (Intel Mac에서 빌드)
   build-macos:
