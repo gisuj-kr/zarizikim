@@ -16,7 +16,11 @@ export const useAttendanceStore = create((set, get) => ({
     // 계산된 값
     get isCheckedIn() {
         const { todayAttendance } = get();
-        return todayAttendance?.check_in && !todayAttendance?.check_out;
+        // check_out이 없어도 work_duration_minutes가 있으면 퇴근 처리된 것으로 판단
+        // (잠자기/시스템 종료 시 check_out 대신 work_duration_minutes로 퇴근 기록)
+        return todayAttendance?.check_in
+            && !todayAttendance?.check_out
+            && !todayAttendance?.work_duration_minutes;
     },
 
     get workDuration() {

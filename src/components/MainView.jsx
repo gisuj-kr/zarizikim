@@ -59,8 +59,8 @@ function MainView() {
         const timer = setInterval(() => {
             setCurrentTime(new Date());
 
-            // 근무 시간 계산
-            if (todayAttendance?.check_in && !todayAttendance?.check_out) {
+            // 근무 시간 계산 (check_out도 없고 work_duration_minutes도 없을 때만 카운트)
+            if (todayAttendance?.check_in && !todayAttendance?.check_out && !todayAttendance?.work_duration_minutes) {
                 const minutes = calculateMinutesBetween(todayAttendance.check_in, new Date());
                 setWorkDuration(minutes);
             }
@@ -70,8 +70,14 @@ function MainView() {
     }, [todayAttendance]);
 
     // 출근 상태
-    const isCheckedIn = todayAttendance?.check_in && !todayAttendance?.check_out;
-    const isCheckedOut = todayAttendance?.check_in && todayAttendance?.check_out;
+    // isCheckedIn: check_in 있고, check_out 없고, work_duration_minutes도 없어야 근무중
+    // (잠자기 퇴근 시 check_out=null이지만 work_duration_minutes가 저장되므로 퇴근으로 처리)
+    const isCheckedIn = todayAttendance?.check_in
+        && !todayAttendance?.check_out
+        && !todayAttendance?.work_duration_minutes;
+    // isCheckedOut: check_out 있거나, 잠자기 퇴근으로 work_duration_minutes가 저장된 경우
+    const isCheckedOut = todayAttendance?.check_in
+        && (todayAttendance?.check_out || todayAttendance?.work_duration_minutes);
     const loading = attendanceLoading || awayLoading;
 
     // 출근 처리
