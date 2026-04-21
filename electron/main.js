@@ -396,7 +396,9 @@ app.on('window-all-closed', () => {
 });
 
 // macOS에서 dock 아이콘 클릭 시
-app.on('activate', () => {
+// activate는 app.whenReady() 이전에도 발생할 수 있으므로 반드시 ready 확인 후 실행
+app.on('activate', async () => {
+    await app.whenReady();
     if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
     } else {
