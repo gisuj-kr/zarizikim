@@ -41,6 +41,8 @@ function App() {
                 const closedAway = await closeStaleAwayRecords(user.id);
                 if (closedAway > 0) {
                     console.log(`미종료 자리비움 ${closedAway}건 자동 정리`);
+                    // awayStore 상태 갱신 (Supabase에서 다시 로드)
+                    await useAwayStore.getState().loadTodayRecords();
                 }
 
                 // 미처리 출근 기록 자동 처리
