@@ -334,17 +334,21 @@ if (!gotTheLock) {
             if (!isCheckedIn) return;
 
             const isMac = process.platform === 'darwin';
+            const now = new Date();
+            const hour = now.getHours();
 
             if (isMac) {
-                // Mac: 앱이 트레이에서 살아있으므로 잠자기 시 명시적으로 퇴근 처리
-                // 깨어났을 때 day-changed → renderer-ready → auto-check-in 흐름으로 재출근
-                if (mainWindow && mainWindow.webContents) {
-                    mainWindow.webContents.send('auto-check-out');
+                // Mac: 잠자기 직전 async IPC(checkOut)는 네트워크 단절로 hung될 수 있음
+                // → resume 시 webContents.reload()로 렌더러를 재초기화하여 처리
+                // 18시 이후면 근무시간만 업데이트 (빠른 작업)
+                if (hour >= 18) {
+                    if (mainWindow && mainWindow.webContents) {
+                        mainWindow.webContents.send('auto-update-work-duration');
+                    }
                 }
+                // 18시 이전: 아무것도 안 함 (resume 시 reload → 기존 기록 유지)
             } else {
-                // Windows: 18시 이후면 근무시간만 기록 (앱이 재시작되므로 handleUnprocessed로 처리)
-                const now = new Date();
-                const hour = now.getHours();
+                // Windows: 18시 이후면 근무시간만 기록
                 if (hour >= 18) {
                     if (mainWindow && mainWindow.webContents) {
                         mainWindow.webContents.send('auto-update-work-duration');
@@ -356,29 +360,21 @@ if (!gotTheLock) {
 
         // 잠자기에서 깨어날 때
         powerMonitor.on('resume', () => {
-            // 자리비움 중이면 먼저 종료
-            if (isAway) {
-                const endTime = new Date();
-                if (mainWindow && mainWindow.webContents) {
-                    mainWindow.webContents.send('auto-away-end', {
-                        startTime: awayStartTime.toISOString(),
-                        endTime: endTime.toISOString(),
-                    });
-                }
-                isAway = false;
-                awayStartTime = null;
-            }
-
             // 메인 프로세스 상태 리셋
-            // (Mac은 앱이 유지되므로 resume 시 반드시 초기화 필요)
             isCheckedIn = false;
+            isAway = false;
+            awayStartTime = null;
             updateTrayIcon('idle');
 
-            // 렌더러에 날짜 변경(또는 재초기화) 알림
-            // 렌더러가 오늘 날짜 기준으로 출퇴근 기록을 다시 로드하고
-            // notifyRendererReady를 재전송하면 자동 출근 체크가 실행됨
+            // 렌더러를 완전히 reload하여 재초기화
+            // (sleep 중 네트워크 단절로 hung된 async 작업을 안전하게 초기화)
+            // 1.5초 후 reload: OS/네트워크 복구 대기
             if (mainWindow && mainWindow.webContents) {
-                mainWindow.webContents.send('day-changed');
+                setTimeout(() => {
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.reload();
+                    }
+                }, 1500);
             }
         });
 
@@ -529,9 +525,14 @@ ipcMain.on('renderer-ready', (event, { isAlreadyCheckedIn, checkInTime }) => {
         // 출근 안한 상태면 자동 출근 요청
         const now = new Date();
         const hour = now.getHours();
+        const nowMinutes = hour * 60 + now.getMinutes();
 
-        if (hour >= 7) {
-            // 오전 7시 이후면 자동 출근
+        // 퇴근 시간 파싱 (workEndTime: 'HH:MM')
+        const [workEndH, workEndM] = workEndTime.split(':').map(Number);
+        const workEndMinutes = workEndH * 60 + workEndM;
+
+        // 오전 7시 이후 ~ 퇴근 시간 이전에만 자동 출근
+        if (hour >= 7 && nowMinutes < workEndMinutes) {
             if (mainWindow && mainWindow.webContents) {
                 mainWindow.webContents.send('auto-check-in');
             }
