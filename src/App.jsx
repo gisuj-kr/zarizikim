@@ -105,6 +105,53 @@ function App() {
             await endAway(new Date(endTime));
         });
 
+        // 잠자기에서 깨어날 때 (Mac 전용)
+        // 스토어 초기화 → 오늘 날짜 기준 재로드 → 미처리 기록 정리 → notifyRendererReady 재전송
+        // notifyRendererReady(미출근) → 메인 프로세스가 auto-check-in 전송
+        window.electronAPI.onDayChanged(async () => {
+            console.log('잠자기 후 깨어날 - 출퇴근 기록 재로드');
+            try {
+                // 스토어 초기화 (이전 날짜의 상태 클리어)
+                useAttendanceStore.getState().reset();
+                useAwayStore.getState().reset();
+
+                // 미처리 기록 자동 정리 (어제 이전 접속 안 한 문제 처리)
+                if (user) {
+                    try {
+                        const processed = await handleUnprocessedAttendance(user.id);
+                        if (processed) {
+                            console.log('미처리 출근 기록 자동 정리됨:', processed);
+                        }
+                    } catch (e) {
+                        console.error('미처리 기록 정리 오류:', e);
+                    }
+                }
+
+                // 오늘 날짜 기준으로 출퇴근 기록 재로드
+                const attendance = await loadTodayAttendance();
+
+                // 출근 상태 확인
+                // check_in이 있고 check_out/work_duration_minutes가 모두 없으면 근무중
+                // (잠자기 전 suspend에서 auto-check-out 전송했는데 네트워크 실패 등으로 미완료된 경우)
+                const isAlreadyCheckedIn =
+                    attendance?.check_in &&
+                    !attendance?.check_out &&
+                    !attendance?.work_duration_minutes;
+
+                // 메인 프로세스에 렌더러 준비 완료 알림
+                // isAlreadyCheckedIn=false → 메인이 auto-check-in 전송 → 렌더러에서 checkIn() 호웉
+                // checkIn() 서비스: 남아있는 기록의 check_out만 null로 정리, 최소 출근시간 유지
+                window.electronAPI.notifyRendererReady(
+                    !!isAlreadyCheckedIn,
+                    attendance?.check_in || null
+                );
+            } catch (error) {
+                console.error('날짜 변경 처리 오류:', error);
+                // 에러 시 미출근 상태로 통보 (자동 출근 시도)
+                window.electronAPI.notifyRendererReady(false, null);
+            }
+        });
+
         // 컴포넌트 언마운트 시 리스너 제거
         return () => {
             window.electronAPI.removeAllListeners();

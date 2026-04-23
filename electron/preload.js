@@ -97,6 +97,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
 
     /**
+     * 잠자기에서 깨어날 때 이벤트 수신 (Mac 전용)
+     * - 렌더러가 오늘 날짜 기준으로 재로드 하고 notifyRendererReady 재전송
+     */
+    onDayChanged: (callback) => {
+        ipcRenderer.on('day-changed', () => callback());
+    },
+
+    /**
      * 퇴근 처리 완료 알림 (main에서 종료 대기 중일 때)
      */
     notifyCheckOutComplete: () => {
@@ -121,6 +129,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeAllListeners('auto-away-start');
         ipcRenderer.removeAllListeners('auto-away-end');
         ipcRenderer.removeAllListeners('auto-update-work-duration');
+        ipcRenderer.removeAllListeners('day-changed');
     },
 });
 

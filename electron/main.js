@@ -329,12 +329,34 @@ if (!gotTheLock) {
         // 자동 업데이트 체크
         setupAutoUpdater();
 
-        // 잠자기 모드에서 깨어날 때
-        powerMonitor.on('resume', () => {
-            // 자동 출근 체크
-            checkAutoCheckIn();
+        // 잠자기 직전 이벤트
+        powerMonitor.on('suspend', () => {
+            if (!isCheckedIn) return;
 
-            // 자리비움 중이면 종료
+            const isMac = process.platform === 'darwin';
+
+            if (isMac) {
+                // Mac: 앱이 트레이에서 살아있으므로 잠자기 시 명시적으로 퇴근 처리
+                // 깨어났을 때 day-changed → renderer-ready → auto-check-in 흐름으로 재출근
+                if (mainWindow && mainWindow.webContents) {
+                    mainWindow.webContents.send('auto-check-out');
+                }
+            } else {
+                // Windows: 18시 이후면 근무시간만 기록 (앱이 재시작되므로 handleUnprocessed로 처리)
+                const now = new Date();
+                const hour = now.getHours();
+                if (hour >= 18) {
+                    if (mainWindow && mainWindow.webContents) {
+                        mainWindow.webContents.send('auto-update-work-duration');
+                    }
+                }
+                // 18시 이전: 아무것도 안 함 (다음 기동 시 계속 근무)
+            }
+        });
+
+        // 잠자기에서 깨어날 때
+        powerMonitor.on('resume', () => {
+            // 자리비움 중이면 먼저 종료
             if (isAway) {
                 const endTime = new Date();
                 if (mainWindow && mainWindow.webContents) {
@@ -345,39 +367,34 @@ if (!gotTheLock) {
                 }
                 isAway = false;
                 awayStartTime = null;
-                updateTrayIcon('working');
+            }
+
+            // 메인 프로세스 상태 리셋
+            // (Mac은 앱이 유지되므로 resume 시 반드시 초기화 필요)
+            isCheckedIn = false;
+            updateTrayIcon('idle');
+
+            // 렌더러에 날짜 변경(또는 재초기화) 알림
+            // 렌더러가 오늘 날짜 기준으로 출퇴근 기록을 다시 로드하고
+            // notifyRendererReady를 재전송하면 자동 출근 체크가 실행됨
+            if (mainWindow && mainWindow.webContents) {
+                mainWindow.webContents.send('day-changed');
             }
         });
 
-        // PC 종료/잠자기 시 - 18시 이후면 근무시간만 기록 (퇴근 시간은 기록 안함)
-        powerMonitor.on('suspend', () => {
-            if (isCheckedIn) {
-                const now = new Date();
-                const hour = now.getHours();
-
-                if (hour >= 18) {
-                    // 18시 이후: 근무시간만 기록 (퇴근 시간 없이)
-                    if (mainWindow && mainWindow.webContents) {
-                        mainWindow.webContents.send('auto-update-work-duration');
-                    }
-                }
-                // 18시 이전: 아무것도 하지 않음 (다음 기동 시 계속 근무)
-            }
-        });
-
+        // PC 종료 시 (Windows 주 사용)
         powerMonitor.on('shutdown', () => {
-            if (isCheckedIn) {
-                const now = new Date();
-                const hour = now.getHours();
+            if (!isCheckedIn) return;
 
-                if (hour >= 18) {
-                    // 18시 이후: 근무시간만 기록 (퇴근 시간 없이)
-                    if (mainWindow && mainWindow.webContents) {
-                        mainWindow.webContents.send('auto-update-work-duration');
-                    }
+            const now = new Date();
+            const hour = now.getHours();
+            if (hour >= 18) {
+                // 18시 이후: 근무시간만 기록 (퇴근 시간 없이)
+                if (mainWindow && mainWindow.webContents) {
+                    mainWindow.webContents.send('auto-update-work-duration');
                 }
-                // 18시 이전: 아무것도 하지 않음 (다음 기동 시 계속 근무)
             }
+            // 18시 이전: 아무것도 안 함 (다음 기동 시 계속 근무)
         });
 
         // Windows 시작 시 자동 실행 설정
