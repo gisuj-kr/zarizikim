@@ -37,13 +37,14 @@ function App() {
 
             try {
                 const processed = await handleUnprocessedAttendance(user.id);
-                if (processed) {
-                    console.log('미처리 출근 기록 자동 처리됨:', processed);
+                if (processed && processed.length > 0) {
+                    console.log('미처리 출근 기록 자동 처리됨:', processed.length, '건');
                     // 알림 표시
                     if (window.electronAPI) {
+                        const dates = processed.map(r => r.date).join(', ');
                         window.electronAPI.showNotification(
                             '미처리 출근 기록 처리',
-                            `${processed.date} 출근 기록이 자동으로 처리되었습니다.`
+                            `${dates} 출근 기록이 자동으로 처리되었습니다.`
                         );
                     }
                 }
@@ -119,8 +120,8 @@ function App() {
                 if (user) {
                     try {
                         const processed = await handleUnprocessedAttendance(user.id);
-                        if (processed) {
-                            console.log('미처리 출근 기록 자동 정리됨:', processed);
+                        if (processed && processed.length > 0) {
+                            console.log('미처리 출근 기록 자동 정리됨:', processed.length, '건');
                         }
                     } catch (e) {
                         console.error('미처리 기록 정리 오류:', e);

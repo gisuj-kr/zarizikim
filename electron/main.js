@@ -88,8 +88,14 @@ function showWindow() {
 function checkAutoCheckIn() {
     const now = new Date();
     const hour = now.getHours();
+    const nowMinutes = hour * 60 + now.getMinutes();
 
-    if (hour >= 7 && !isCheckedIn) {
+    // 퇴근 시간 파싱
+    const [workEndH, workEndM] = workEndTime.split(':').map(Number);
+    const workEndMinutes = workEndH * 60 + workEndM;
+
+    // 오전 7시 이후 ~ 퇴근 시간 이전에만 자동 출근
+    if (hour >= 7 && nowMinutes < workEndMinutes && !isCheckedIn) {
         // 렌더러에 자동 출근 요청
         if (mainWindow && mainWindow.webContents) {
             mainWindow.webContents.send('auto-check-in');
@@ -338,15 +344,10 @@ if (!gotTheLock) {
             const hour = now.getHours();
 
             if (isMac) {
-                // Mac: 잠자기 직전 async IPC(checkOut)는 네트워크 단절로 hung될 수 있음
-                // → resume 시 webContents.reload()로 렌더러를 재초기화하여 처리
-                // 18시 이후면 근무시간만 업데이트 (빠른 작업)
-                if (hour >= 18) {
-                    if (mainWindow && mainWindow.webContents) {
-                        mainWindow.webContents.send('auto-update-work-duration');
-                    }
-                }
-                // 18시 이전: 아무것도 안 함 (resume 시 reload → 기존 기록 유지)
+                // Mac: 잠자기 직전에는 어떤 async IPC도 보내지 않음
+                // Supabase API 호출이 네트워크 단절로 hung될 수 있으므로
+                // 모든 처리는 resume 시 webContents.reload()로 안전하게 수행
+                // (reload → handleUnprocessedAttendance로 미처리 기록 정리)
             } else {
                 // Windows: 18시 이후면 근무시간만 기록
                 if (hour >= 18) {
