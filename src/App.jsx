@@ -14,6 +14,7 @@ import { useUserStore } from './stores/userStore';
 import { useAttendanceStore } from './stores/attendanceStore';
 import { useAwayStore } from './stores/awayStore';
 import { handleUnprocessedAttendance } from './services/attendance';
+import { closeStaleAwayRecords } from './services/away';
 
 function App() {
     const { user, isInitialized, loadUser } = useUserStore();
@@ -30,12 +31,19 @@ function App() {
         init();
     }, [loadUser]);
 
-    // 앱 시작 시 미처리된 과거 출근 기록 자동 처리
+    // 앱 시작 시 미처리된 과거 출근 기록 + 미종료 자리비움 자동 처리
     useEffect(() => {
         const checkUnprocessed = async () => {
             if (!user) return;
 
             try {
+                // 미종료 자리비움 자동 정리 (end_time=null인 레코드)
+                const closedAway = await closeStaleAwayRecords(user.id);
+                if (closedAway > 0) {
+                    console.log(`미종료 자리비움 ${closedAway}건 자동 정리`);
+                }
+
+                // 미처리 출근 기록 자동 처리
                 const processed = await handleUnprocessedAttendance(user.id);
                 if (processed && processed.length > 0) {
                     console.log('미처리 출근 기록 자동 처리됨:', processed.length, '건');
@@ -49,7 +57,7 @@ function App() {
                     }
                 }
             } catch (error) {
-                console.error('미처리 출근 기록 처리 오류:', error);
+                console.error('미처리 기록 처리 오류:', error);
             }
         };
 

@@ -138,3 +138,46 @@ export function calculateTotalAwayMinutes(records) {
         return total + (record.duration_minutes || 0);
     }, 0);
 }
+
+/**
+ * 미종료된 자리비움 기록 자동 정리
+ * - 앱 시작/reload 시 호출하여 end_time이 null인 과거 자리비움을 종료 처리
+ * - 오늘 기록도 포함 (잠자기 후 깨어났을 때 이전 자리비움 정리)
+ * @param {string} userId - 사용자 ID
+ * @returns {Promise<number>} 정리된 레코드 수
+ */
+export async function closeStaleAwayRecords(userId) {
+    // end_time이 null인 모든 자리비움 기록 조회
+    const { data: staleRecords, error } = await supabase
+        .from('away_records')
+        .select('*')
+        .eq('user_id', userId)
+        .is('end_time', null);
+
+    if (error || !staleRecords || staleRecords.length === 0) {
+        return 0;
+    }
+
+    let closedCount = 0;
+    for (const record of staleRecords) {
+        const startTime = new Date(record.start_time);
+        // 종료 시간: 시작 시간 + 10분 (유휴 감지 임계값 기준)
+        const endTime = new Date(startTime.getTime() + 10 * 60 * 1000);
+        const duration = 10; // 분
+
+        const { error: updateError } = await supabase
+            .from('away_records')
+            .update({
+                end_time: endTime.toISOString(),
+                duration_minutes: duration,
+            })
+            .eq('id', record.id);
+
+        if (!updateError) {
+            closedCount++;
+            console.log(`미종료 자리비움 자동 정리: ${record.id} (${record.start_time})`);
+        }
+    }
+
+    return closedCount;
+}
