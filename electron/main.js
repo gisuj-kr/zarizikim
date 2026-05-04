@@ -420,7 +420,7 @@ app.on('activate', async () => {
     }
 });
 
-// 앱 종료 전 - 출근 상태면 확인 대화상자 표시
+// 앱 종료 전 - Mac에서는 트레이로 숨기기, 완전 종료는 forceQuit 플래그 필요
 app.on('before-quit', async (event) => {
     // 이미 종료 확정되었으면 바로 종료
     if (app.isQuitting) {
@@ -430,7 +430,18 @@ app.on('before-quit', async (event) => {
         return;
     }
 
-    // 출근 상태면 확인 대화상자 표시
+    const isMac = process.platform === 'darwin';
+
+    // Mac: forceQuit가 아니면 트레이로 숨기기만 (앱 유지)
+    if (isMac && !app.forceQuit) {
+        event.preventDefault();
+        if (mainWindow) {
+            mainWindow.hide();
+        }
+        return;
+    }
+
+    // 완전 종료 시: 출근 상태면 확인 대화상자 표시
     if (isCheckedIn) {
         event.preventDefault();
 
@@ -474,8 +485,10 @@ app.on('before-quit', async (event) => {
 
             // 종료
             app.quit();
+        } else {
+            // 취소 시 forceQuit 초기화
+            app.forceQuit = false;
         }
-        // 취소 선택 시 아무것도 안 함 (종료 취소)
     } else {
         // 출근 상태 아니면 바로 종료
         app.isQuitting = true;
@@ -551,8 +564,9 @@ ipcMain.on('show-notification', (event, { title, body }) => {
     showNotification(title, body);
 });
 
-// 앱 종료 요청
+// 앱 종료 요청 (렌더러에서 호출 시 완전 종료)
 ipcMain.on('quit-app', () => {
+    app.forceQuit = true;
     app.isQuitting = true;
     app.quit();
 });

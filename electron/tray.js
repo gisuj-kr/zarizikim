@@ -105,7 +105,9 @@ function createDefaultIcon(color) {
  * 컨텍스트 메뉴 업데이트
  */
 function updateContextMenu() {
-    const contextMenu = Menu.buildFromTemplate([
+    const isMac = process.platform === 'darwin';
+
+    const menuTemplate = [
         {
             label: '열기',
             click: () => {
@@ -116,17 +118,32 @@ function updateContextMenu() {
             },
         },
         { type: 'separator' },
-        {
-            label: '종료',
+    ];
+
+    if (isMac) {
+        // Mac: 일반 종료는 숨기기, 완전 종료만 실제 종료
+        menuTemplate.push({
+            label: '완전 종료',
             click: () => {
                 if (appRef) {
-                    // isQuitting을 여기서 설정하지 않음 - before-quit에서 처리
+                    appRef.forceQuit = true;
                     appRef.quit();
                 }
             },
-        },
-    ]);
+        });
+    } else {
+        // Windows: 기존 종료 동작 유지
+        menuTemplate.push({
+            label: '종료',
+            click: () => {
+                if (appRef) {
+                    appRef.quit();
+                }
+            },
+        });
+    }
 
+    const contextMenu = Menu.buildFromTemplate(menuTemplate);
     tray.setContextMenu(contextMenu);
 }
 
