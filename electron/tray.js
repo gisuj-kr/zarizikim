@@ -121,7 +121,17 @@ function updateContextMenu() {
     ];
 
     if (isMac) {
-        // Mac: 일반 종료는 숨기기, 완전 종료만 실제 종료
+        // Mac: 퇴근 메뉴 (퇴근 처리 후 트레이 유지)
+        menuTemplate.push({
+            label: '퇴근',
+            click: () => {
+                if (mainWindow && mainWindow.webContents) {
+                    mainWindow.webContents.send('auto-check-out');
+                }
+            },
+        });
+        menuTemplate.push({ type: 'separator' });
+        // Mac: 완전 종료 (퇴근 확인 → 앱 종료)
         menuTemplate.push({
             label: '완전 종료',
             click: () => {
